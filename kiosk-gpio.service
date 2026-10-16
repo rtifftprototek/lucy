@@ -1,0 +1,14 @@
+[Unit]
+Description=Trade show display GPIO control (mode button + PIR)
+After=multi-user.target
+
+[Service]
+Type=simple
+User=admin
+WorkingDirectory=/home/admin/eve-kiosk
+ExecStart=/usr/bin/python3 /home/admin/eve-kiosk/gpio_control.py
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

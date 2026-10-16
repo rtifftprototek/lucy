@@ -1,0 +1,12 @@
+[Unit]
+Description=ydotool daemon (synthetic input, used to move the mouse cursor out of the way at boot)
+
+[Service]
+Type=simple
+ExecStartPre=-/sbin/modprobe uinput
+ExecStart=/usr/local/bin/ydotoold --socket-path=/home/admin/.ydotool_socket --socket-own=1000:1000
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

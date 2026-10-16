@@ -1,0 +1,15 @@
+[Unit]
+Description=Move mouse cursor out of the way once the kiosk display is up
+After=kiosk-display.service ydotoold.service
+Requires=ydotoold.service
+
+[Service]
+Type=oneshot
+User=admin
+Environment=YDOTOOL_SOCKET=/home/admin/.ydotool_socket
+# Give Chromium/cage a few seconds to finish rendering before moving the
+# cursor, so it isn't racing the kiosk display's own startup.
+ExecStart=/bin/sh -c 'sleep 8 && /usr/local/bin/ydotool mousemove --absolute -- 1910 1070'
+
+[Install]
+WantedBy=multi-user.target

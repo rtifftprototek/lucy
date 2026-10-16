@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Trade Show Display</title>
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    background: #000;
+    overflow: hidden;
+    cursor: none; /* hide mouse cursor - no touch/mouse interaction expected */
+  }
+
+  /*
+    Panel displays natively in landscape at 1920x1080 - no rotation
+    needed. Everything below sizes itself off the viewport (100vw/100vh)
+    rather than a fixed pixel resolution, so it doesn't need updating
+    again if the actual output resolution ever turns out to be
+    something else.
+  */
+  .mode {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    display: none;
+  }
+
+  .mode.active {
+    display: block;
+  }
+
+  /* ---- Animation mode (sleeping/idle cycle + motion-triggered awake sequence) ---- */
+  #mode-animation video,
+  #mode-animation img {
+    width: 100vw;
+    height: 100vh;
+    object-fit: cover;
+    display: block;
+  }
+  #eyes-still {
+    position: absolute;
+    top: 0;
+    left: 0;
+    display: none;
+  }
+
+  /* ---- Clock mode ---- */
+  #mode-clock {
+    background: #000;
+  }
+  #mode-clock img {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+  }
+  /* Hands are square images (see README for spec) centered on the same
+     point as the clock face's center point. Adjust --clock-cx/--clock-cy
+     below (as percentages of viewport width/height) to match your face
+     artwork's actual center point if it isn't dead-center. */
+  #mode-clock {
+    --clock-cx: 50vw;
+    --clock-cy: 50vh;
+    --hand-size: 32vw; /* width/height of the square hand images, as a share of viewport width */
+  }
+  .hand {
+    position: absolute;
+    width: var(--hand-size);
+    height: var(--hand-size);
+    left: calc(var(--clock-cx) - (var(--hand-size) / 2));
+    top: calc(var(--clock-cy) - (var(--hand-size) / 2));
+    transform-origin: center center;
+    pointer-events: none;
+  }
+
+  /* Sits on top of the hands, covering where they converge - like a
+     clock's center cap. Optional: silently hidden if the file is
+     missing (see onerror on the img tag below). Adjust --center-size
+     if the logo looks too big/small relative to the hands. */
+  #mode-clock {
+    --center-size: 14vw;
+  }
+  #clock-center {
+    position: absolute;
+    width: var(--center-size);
+    height: var(--center-size);
+    left: calc(var(--clock-cx) - (var(--center-size) / 2));
+    top: calc(var(--clock-cy) - (var(--center-size) / 2));
+    pointer-events: none;
+  }
+
+  /* ---- Logo mode ---- */
+  #mode-logo video {
+    width: 100vw;
+    height: 100vh;
+    object-fit: cover;
+    display: block;
+  }
+
+  /* ---- Capabilities mode ---- */
+  #mode-capabilities video {
+    width: 100vw;
+    height: 100vh;
+    object-fit: cover;
+    display: block;
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+
+  <div id="mode-animation" class="mode">
+    <video id="eyes-video" muted playsinline></video>
+    <img id="eyes-still" src="assets/eyes_sleeping_still.png" alt="">
+  </div>
+
+  <div id="mode-clock" class="mode">
+    <img src="assets/clock_face.png" alt="">
+    <img class="hand" id="hand-hour" src="assets/clock_hand_hour.png" alt="" onerror="this.style.display='none'">
+    <img class="hand" id="hand-minute" src="assets/clock_hand_minute.png" alt="" onerror="this.style.display='none'">
+    <img class="hand" id="hand-second" src="assets/clock_hand_second.png" alt="" onerror="this.style.display='none'">
+    <img id="clock-center" src="assets/clock_center.png" alt="" onerror="this.style.display='none'">
+  </div>
+
+  <div id="mode-logo" class="mode">
+    <video id="logo-video" muted playsinline></video>
+  </div>
+
+  <div id="mode-capabilities" class="mode">
+    <video id="capabilities-video" muted playsinline></video>
+  </div>
+
+</div>
+
+<script>
+(function () {
+  const MODES = ['animation', 'clock', 'logo', 'capabilities'];
+  // The modes cycled by the button, in order.
+  const MAIN_MODES = ['clock', 'logo', 'animation', 'capabilities'];
+
+  // How many times to repeat the awake clip back-to-back during the
+  // ambient sleeping/idle cycle, how long (in ms) to hold on the static
+  // still image before waking, and the minimum time motion must be
+  // "resting" before a new trigger is even allowed to interrupt - all
+  // easy to retune.
+  const AWAKE_LOOP_COUNT = 3;
+  const STILL_HOLD_MIN_MS = 60000;   // 1 minute
+  const STILL_HOLD_MAX_MS = 300000;  // 5 minutes
+  const MIN_REST_BEFORE_INTERRUPT_MS = 10000; // 10 seconds
+
+  let currentMode = null;
+  let modeIndex = 0;
+  let lastMotionSeq = null; // last-seen motion-trigger counter
+  let lastSeq = null;       // last-seen button-press sequence number
+  let ambientTimer = null;  // pending "wake from still image" timer
+  let sequenceGen = 0;      // bumped on every interrupt to invalidate in-flight chains
+  let restingSince = null;  // timestamp we entered sleeping/still - null whenever not resting
+
+  // logo/capabilities are simple: one clip, looped, same on every entry.
+  // The eyes (animation mode) are handled separately below, since they
+  // involve a longer chained sequence with a still image and a random
+  // hold, not just one looping clip.
+  const SIMPLE_VIDEO_SOURCES = {
+    logo: { el: () => document.getElementById('logo-video'), src: 'assets/logo.mp4' },
+    capabilities: { el: () => document.getElementById('capabilities-video'), src: 'assets/capabilities.mp4' },
+  };
+
+  // Every mode's associated video element, if it has one - used generically
+  // to pause/release whatever we're leaving, regardless of mode.
+  const MODE_VIDEO_EL = {
+    animation: () => document.getElementById('eyes-video'),
+    logo: () => document.getElementById('logo-video'),
+    capabilities: () => document.getElementById('capabilities-video'),
+  };
+
+  const EYE_CLIPS = {
+    sleeping: 'assets/eyes_sleeping.mp4',
+    waking: 'assets/eyes_waking.mp4',
+    awake: 'assets/eyes_awake.mp4',
+    idle: 'assets/eyes_idle.mp4',
+  };
+
+  function clearAmbientTimer() {
+    if (ambientTimer) {
+      clearTimeout(ambientTimer);
+      ambientTimer = null;
+    }
+  }
+
+  function showEyesVideo() {
+    document.getElementById('eyes-still').style.display = 'none';
+    document.getElementById('eyes-video').style.display = 'block';
+  }
+
+  // Shows the static still image and releases the video element's
+  // decoder while it's up (nothing to decode during a still image).
+  function showEyesStill() {
+    console.log('[eyes] SHOW STILL IMAGE');
+    const v = document.getElementById('eyes-video');
+    v.onended = null;
+    v.pause();
+    v.removeAttribute('src');
+    v.load();
+    v.style.display = 'none';
+    document.getElementById('eyes-still').style.display = 'block';
+  }
+
+  // Plays one eye clip, but only if `gen` still matches the current
+  // sequenceGen - if something else (a new motion trigger, a mode
+  // change) has since bumped it, this call is stale and does nothing.
+  // This is what lets us "always interrupt immediately, even mid-
+  // sequence" without having to manually track and cancel every
+  // possible pending video/timer callback individually.
+  function playEyeClipGen(key, gen, { loop = false, onEnded = null } = {}) {
+    if (gen !== sequenceGen) {
+      console.log('[eyes] SKIP (stale)', key, 'gen', gen, 'current', sequenceGen);
+      return;
+    }
+    console.log('[eyes] PLAY', key, 'gen', gen, loop ? '(loop)' : '(once)');
+    showEyesVideo();
+    const v = document.getElementById('eyes-video');
+    v.onended = () => {
+      if (gen !== sequenceGen) return;
+      if (loop) {
+        v.currentTime = 0;
+        v.play().catch(() => {});
+      } else if (onEnded) {
+        onEnded();
+      }
+    };
+    v.src = EYE_CLIPS[key];
+    v.currentTime = 0;
+    v.play().catch(() => {});
+  }
+
+  // Plays the awake clip `remaining` more times back-to-back, then
+  // calls onDone.
+  function playAwakeNTimes(gen, remaining, onDone) {
+    if (gen !== sequenceGen) return;
+    if (remaining <= 0) { onDone(); return; }
+    playEyeClipGen('awake', gen, {
+      onEnded: () => playAwakeNTimes(gen, remaining - 1, onDone),
+    });
+  }
+
+  // The default/ambient sequence, repeating forever until interrupted:
+  // sleeping clip -> static still image (random hold) -> waking clip ->
+  // awake clip x AWAKE_LOOP_COUNT -> back to sleeping clip, repeat.
+  function runAmbientStep(gen) {
+    if (gen !== sequenceGen) return;
+    console.log('[eyes] --- ambient step: sleeping ---');
+    restingSince = Date.now();
+    playEyeClipGen('sleeping', gen, {
+      onEnded: () => {
+        if (gen !== sequenceGen) return;
+        showEyesStill();
+        const holdMs = STILL_HOLD_MIN_MS + Math.random() * (STILL_HOLD_MAX_MS - STILL_HOLD_MIN_MS);
+        ambientTimer = setTimeout(() => {
+          if (gen !== sequenceGen) return;
+          restingSince = null; // no longer restful once waking starts
+          playEyeClipGen('waking', gen, {
+            onEnded: () => {
+              if (gen !== sequenceGen) return;
+              playAwakeNTimes(gen, AWAKE_LOOP_COUNT, () => runAmbientStep(gen));
+            },
+          });
+        }, holdMs);
+      },
+    });
+  }
+
+  function startAmbientCycle() {
+    sequenceGen++;
+    const gen = sequenceGen;
+    setMode('animation');
+    runAmbientStep(gen);
+  }
+
+  // The motion-triggered sequence: waking clip -> idle clip -> back into
+  // the ambient sleeping/idle cycle from the top. Always interrupts
+  // immediately, even if a previous sequence (ambient or motion) is
+  // already mid-playback.
+  function triggerMotionSequence() {
+    sequenceGen++;
+    const gen = sequenceGen;
+    console.log('[eyes] === MOTION TRIGGERED, new gen', gen, '===');
+    restingSince = null;
+    clearAmbientTimer();
+    setMode('animation');
+    playEyeClipGen('waking', gen, {
+      onEnded: () => {
+        if (gen !== sequenceGen) return;
+        playEyeClipGen('idle', gen, {
+          onEnded: () => {
+            if (gen !== sequenceGen) return;
+            runAmbientStep(gen);
+          },
+        });
+      },
+    });
+  }
+
+  function setMode(mode) {
+    if (!MODES.includes(mode) || mode === currentMode) return;
+    try {
+      const previousMode = currentMode;
+      currentMode = mode;
+      MODES.forEach(m => {
+        document.getElementById('mode-' + m).classList.toggle('active', m === mode);
+      });
+
+      // Leaving animation mode entirely (not just switching clips within
+      // it) - invalidate any in-flight sequence and reset to the video
+      // view so re-entering later starts clean.
+      if (previousMode === 'animation') {
+        sequenceGen++;
+        clearAmbientTimer();
+        restingSince = null;
+        document.getElementById('eyes-still').style.display = 'none';
+      }
+
+      // Release whatever video we're leaving, so it stops holding the
+      // hardware decoder and frees memory. Generic across all modes,
+      // including animation (eyes), regardless of which clip was playing.
+      const leavingEl = MODE_VIDEO_EL[previousMode];
+      if (leavingEl) {
+        const v = leavingEl();
+        v.onended = null;
+        v.pause();
+        v.removeAttribute('src');
+        v.load();
+      }
+
+      // Simple single-clip modes (logo/capabilities) auto-load and loop
+      // here. Animation mode does NOT auto-load anything here - it's
+      // driven by startAmbientCycle()/triggerMotionSequence() instead.
+      // We handle looping manually (via the 'ended' event) instead of
+      // the native loop attribute throughout, since on this hardware the
+      // native loop's internal seek-and-redecode occasionally stalls,
+      // leaving the video frozen on its last frame.
+      const entering = SIMPLE_VIDEO_SOURCES[mode];
+      if (entering) {
+        const v = entering.el();
+        v.onended = () => {
+          v.currentTime = 0;
+          v.play().catch(() => {});
+        };
+        v.src = entering.src;
+        v.currentTime = 0;
+        v.play().catch(() => {});
+      }
+    } catch (err) {
+      // Never let a failure here (missing element, video API quirk, etc.)
+      // silently kill the caller.
+      console.error('setMode error for', mode, err);
+    }
+  }
+
+  // Shows one of the main modes by index - the animation slot enters the
+  // ambient sleeping/idle cycle.
+  function showMainMode(index) {
+    modeIndex = ((index % MAIN_MODES.length) + MAIN_MODES.length) % MAIN_MODES.length;
+    const mode = MAIN_MODES[modeIndex];
+    if (mode === 'animation') {
+      startAmbientCycle();
+    } else {
+      setMode(mode);
+    }
+  }
+
+  // Called when the physical button's press count (seq) has changed -
+  // advances to the next mode.
+  function forceNext() {
+    showMainMode(modeIndex + 1);
+  }
+
+  // ---- Clock hands ----
+  function updateClock() {
+    const now = new Date();
+    const h = now.getHours() % 12;
+    const m = now.getMinutes();
+    const s = now.getSeconds();
+
+    const hourDeg = (h + m / 60) * 30;         // 360/12
+    const minuteDeg = (m + s / 60) * 6;         // 360/60
+    const secondDeg = s * 6;                    // 360/60
+
+    document.getElementById('hand-hour').style.transform = `rotate(${hourDeg}deg)`;
+    document.getElementById('hand-minute').style.transform = `rotate(${minuteDeg}deg)`;
+    document.getElementById('hand-second').style.transform = `rotate(${secondDeg}deg)`;
+  }
+  setInterval(updateClock, 1000);
+  updateClock();
+
+  // Only accepts a motion trigger if we're genuinely resting (sleeping
+  // clip or still image) AND have been resting for at least
+  // MIN_REST_BEFORE_INTERRUPT_MS - never during waking, the awake loop,
+  // or the motion sequence itself, and never within the first few
+  // seconds of just having fallen asleep.
+  function handleMotionSignal() {
+    const restedMs = restingSince === null ? -1 : Date.now() - restingSince;
+    if (restedMs >= MIN_REST_BEFORE_INTERRUPT_MS) {
+      triggerMotionSequence();
+    } else {
+      console.log('[eyes] motion ignored - not interruptible right now (rested', restedMs, 'ms)');
+    }
+  }
+
+  // ---- Mode control (temporary, for bench testing before buttons are wired) ----
+  // Press 1-4 to force a specific mode directly (1 re-enters the ambient
+  // eyes cycle). Press M to simulate a motion trigger (subject to the
+  // same resting-window gate real motion goes through), N to simulate a
+  // button press, for testing without the real hardware wired in.
+  window.addEventListener('keydown', (e) => {
+    if (e.key === '1') startAmbientCycle();
+    if (e.key === '2') setMode('clock');
+    if (e.key === '3') setMode('logo');
+    if (e.key === '4') setMode('capabilities');
+    if (e.key.toLowerCase() === 'm') { handleMotionSignal(); }
+    if (e.key.toLowerCase() === 'n') { forceNext(); }
+  });
+
+  // ---- Mode control (production path, once GPIO button/PIR script is running) ----
+  // gpio_control.py writes {motionSeq, assetIndex, seq} to state.json.
+  // We poll it here: a change in motionSeq means real motion was
+  // detected, so we run it through the resting-window gate; a change in
+  // seq means the physical button was pressed, so we advance to the
+  // next mode.
+  setInterval(() => {
+    fetch('state.json', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(data => {
+        if (!data) return;
+        if (typeof data.motionSeq === 'number' && data.motionSeq !== lastMotionSeq) {
+          const firstRun = lastMotionSeq === null;
+          lastMotionSeq = data.motionSeq;
+          if (!firstRun) handleMotionSignal();
+        }
+        if (typeof data.seq === 'number' && data.seq !== lastSeq) {
+          const firstRun = lastSeq === null;
+          lastSeq = data.seq;
+          if (!firstRun) forceNext();
+        }
+      })
+      .catch(() => {});
+  }, 500);
+
+  showMainMode(MAIN_MODES.indexOf('animation')); // boot straight into the ambient eyes cycle
+})();
+</script>
+
+</body>
+</html>

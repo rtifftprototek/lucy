@@ -1,0 +1,27 @@
+[Unit]
+Description=Trade show display kiosk (cage + Chromium)
+After=kiosk-server.service
+Requires=kiosk-server.service
+
+[Service]
+Type=simple
+User=admin
+Environment=XDG_RUNTIME_DIR=/run/user/1000
+ExecStartPre=/bin/sh -c 'rm -f /run/user/1000/wayland-0 /run/user/1000/wayland-0.lock'
+ExecStart=/usr/bin/cage -- /usr/bin/chromium \
+  --kiosk \
+  --ozone-platform=wayland \
+  --noerrdialogs \
+  --disable-infobars \
+  --disable-session-crashed-bubble \
+  --disable-translate \
+  --no-first-run \
+  --overscroll-history-navigation=0 \
+  --autoplay-policy=no-user-gesture-required \
+  --check-for-update-interval=31536000 \
+  http://localhost:8080/index.html
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
