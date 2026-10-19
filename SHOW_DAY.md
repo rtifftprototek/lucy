@@ -1,5 +1,7 @@
 # Show Day Cheat Sheet — connecting to the Pi from a laptop
 
+**Pi login:** `ssh admin@dog-kiosk.local` (hostname `dog-kiosk`, username `admin`).
+
 Laptop and Pi both join your **phone's hotspot**, then you SSH in from
 PowerShell. Do the "Before the show" part at home, while the Pi is
 still reachable on your home WiFi.
@@ -23,7 +25,7 @@ still reachable on your home WiFi.
 SSH into the Pi on home WiFi:
 
 ```
-ssh admin@HOSTNAME.local
+ssh admin@dog-kiosk.local
 ```
 
 Then run the command below. Replace `LucyHotspot` and `PASSWORD` with
@@ -47,7 +49,7 @@ around, preferring the hotspot.
    ```
 4. Wait about a minute, then connect again:
    ```
-   ssh admin@HOSTNAME.local
+   ssh admin@dog-kiosk.local
    ```
 5. If `.local` doesn't work over the hotspot (common on phone
    hotspots), use the IP address instead — see "Finding the Pi's IP"
@@ -59,7 +61,7 @@ Plug the cable straight from the laptop into the Pi; no network is
 needed. Then:
 
 ```
-ssh admin@HOSTNAME.local
+ssh admin@dog-kiosk.local
 ```
 
 This usually works with no setup. Test it at home too. Laptops without
@@ -72,7 +74,7 @@ an Ethernet port need a USB-to-Ethernet adapter.
 2. Connect the laptop to the hotspot.
 3. Open **PowerShell**, then connect:
    ```
-   ssh admin@HOSTNAME.local
+   ssh admin@dog-kiosk.local
    ```
    or use the IP instead: `ssh admin@192.168.x.x`.
 4. Type the password. **Nothing appears as you type**; that's normal.
@@ -111,4 +113,4 @@ an Ethernet port need a USB-to-Ethernet adapter.
 | `Could not resolve hostname` | `.local` isn't working on this network. Use the IP instead. |
 | `Connection timed out` | The Pi isn't on the hotspot yet. Wait a minute, and check the hotspot's connected-device count. |
 | `Permission denied` | Wrong username or password (the ones set in Raspberry Pi Imager). |
-| `REMOTE HOST IDENTIFICATION HAS CHANGED` | Run `ssh-keygen -R HOSTNAME.local` (or `ssh-keygen -R <the IP>`), then connect again. |
+| `REMOTE HOST IDENTIFICATION HAS CHANGED` | Run `ssh-keygen -R dog-kiosk.local` (or `ssh-keygen -R <the IP>`), then connect again. |
