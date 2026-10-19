@@ -194,6 +194,11 @@
   const DRIFT_PX = 6;                   // max offset in each direction
   const DRIFT_EVERY_MS = 2 * 60 * 1000;
 
+  // ---- Clock ----
+  // Shown in this time zone regardless of the Pi's own time zone setting
+  // (handles daylight saving automatically).
+  const CLOCK_TIME_ZONE = 'America/Los_Angeles';
+
   // =====================================================================
 
   const $ = (id) => document.getElementById(id);
@@ -412,11 +417,16 @@
   }
 
   // ---- Clock hands ----
+  const clockFormat = new Intl.DateTimeFormat('en-US', {
+    timeZone: CLOCK_TIME_ZONE,
+    hour: 'numeric', minute: 'numeric', second: 'numeric', hourCycle: 'h23',
+  });
   function updateClock() {
-    const now = new Date();
-    const h = now.getHours() % 12;
-    const m = now.getMinutes();
-    const s = now.getSeconds();
+    const parts = {};
+    clockFormat.formatToParts(new Date()).forEach(p => { parts[p.type] = Number(p.value); });
+    const h = parts.hour % 12;
+    const m = parts.minute;
+    const s = parts.second;
     $('hand-hour').style.transform = `rotate(${(h + m / 60) * 30}deg)`;
     $('hand-minute').style.transform = `rotate(${(m + s / 60) * 6}deg)`;
     $('hand-second').style.transform = `rotate(${s * 6}deg)`;

@@ -113,7 +113,7 @@ she's falling asleep, is ignored.
 ### Digital sign mode
 
 Cycles forever through `SIGN_PLAYLIST`:
-1. **Clock** for 30s.
+1. **Clock** for 30s, in Pacific time (`CLOCK_TIME_ZONE`), whatever the Pi's own time zone.
 2. **Prototek motion logo** (`prototek_1.mp4`, 8.5s).
 3. **FABTECH welcome:** the animation plays, then the slide holds for
    20s.
