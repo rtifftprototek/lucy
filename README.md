@@ -1,8 +1,49 @@
 # Trade Show Display — Kiosk Starter
 
-Target canvas: **1920 x 1080** (confirmed native landscape output — no
-rotation needed). All sizing in `index.html` uses viewport-relative
-units (`vw`/`vh`) rather than hardcoded pixels.
+Target canvas: **1920 x 1080 landscape**. All sizing in `index.html`
+uses viewport-relative units (`vw`/`vh`) rather than hardcoded pixels.
+
+## Display: Kimmybow 5.5" OLED (HDMI-to-MIPI board)
+
+The panel is natively **portrait (1080x1920)**. The kiosk rotates it in
+software so the page still renders at 1920x1080 landscape. Two Pi-side
+fixes are needed to make it work:
+
+1. **Corrected EDID.**
+   - The board reports a single 1080x1920@60 mode with an odd
+     horizontal total (1159 px).
+   - The Pi 4's HDMI hardware can't output odd horizontal timings, so
+     the kernel rejects the mode and the screen goes blank once the
+     display driver loads.
+   - `display/lucy-oled-edid.bin` is a copy of the board's EDID with
+     the back porch trimmed by one pixel. The line rate and refresh
+     are unchanged. `display/make_edid.py` regenerates it.
+
+   Install it:
+   ```
+   sudo mkdir -p /lib/firmware/edid
+   sudo cp display/lucy-oled-edid.bin /lib/firmware/edid/
+   sudo mount -o remount,rw /boot/firmware
+   sudo sed -i '1 s/$/ drm.edid_firmware=HDMI-A-1:edid\/lucy-oled-edid.bin/' /boot/firmware/cmdline.txt
+   sudo reboot
+   ```
+   - `/boot/firmware` is mounted read-only on this Pi, hence the
+     remount.
+   - `cmdline.txt` must stay a single line.
+2. **Rotation.**
+   - `kiosk-display.service` runs `wlr-randr` inside `cage` to rotate
+     the output by `LUCY_ROTATION` (90; use 270 if the panel is
+     mounted the other way).
+   - Needs `sudo apt install -y wlr-randr`.
+
+Notes:
+- Use the Pi's **HDMI0** port (next to USB-C), which is `HDMI-A-1`.
+- Power the panel from its own USB-C supply.
+- The boot splash and text before the kiosk starts still look garbled
+  or sideways. The firmware stage doesn't use the corrected EDID. This
+  is cosmetic only.
+- It's an OLED, so use **pure black (`#000000`) backgrounds** and avoid
+  bright static elements (burn-in).
 
 ## Asset filenames
 
@@ -114,7 +155,7 @@ sudo systemctl start kiosk-gpio
 3. Install packages:
    ```
    sudo apt update
-   sudo apt install -y cage chromium seatd python3-gpiozero
+   sudo apt install -y cage chromium seatd python3-gpiozero wlr-randr
    sudo systemctl enable --now seatd
    sudo usermod -aG video admin
    sudo loginctl enable-linger admin
