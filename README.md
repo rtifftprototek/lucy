@@ -212,6 +212,30 @@ sudo systemctl start kiosk-gpio
    sudo reboot
    ```
 
+## Updating the Pi
+
+The Pi's copy lives in `/home/admin/eve-kiosk`.
+
+**First time:** turn that folder into a git checkout of this branch, so
+later updates are one command. This keeps the old folder as a backup.
+
+```
+sudo apt install -y git
+cd /home/admin
+mv eve-kiosk eve-kiosk.bak
+git clone -b claude/zealous-gauss-geyx21 https://github.com/rtifftprototek/lucy.git eve-kiosk
+sudo systemctl restart kiosk-server kiosk-gpio kiosk-display
+```
+
+**After that:**
+
+```
+cd /home/admin/eve-kiosk && git pull && sudo systemctl restart kiosk-server kiosk-gpio kiosk-display
+```
+
+If a `.service` file changed, also copy it into `/etc/systemd/system/`
+and run `sudo systemctl daemon-reload` before restarting.
+
 ## Known limitation: mouse cursor
 
 A small mouse cursor is visible on screen and there's currently no
