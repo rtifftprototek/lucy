@@ -123,6 +123,9 @@
       <img class="hand" id="hand-second" src="assets/clock/clock_hand_second.png" alt="" onerror="this.style.display='none'">
       <img id="clock-center" src="assets/clock/clock_center.png" alt="" onerror="this.style.display='none'">
     </div>
+    <div id="slide-video" class="slide">
+      <video id="sign-video" muted playsinline preload="auto"></video>
+    </div>
     <div id="slide-welcome" class="slide">
       <img class="full" id="welcome-still" src="assets/sign/welcome_slide.png" alt="">
       <video id="welcome-video" muted playsinline preload="auto"></video>
@@ -177,11 +180,14 @@
   //   clock   - the analog clock, shown for `seconds`
   //   welcome - plays the welcome animation once, then holds on the
   //             welcome slide for `seconds`
-  // To add more slides later (e.g. a Prototek logo animation), add a
-  // .slide layer in the HTML above and an entry here.
+  //   video   - plays `src` once, then moves on. Skipped automatically
+  //             if the file is missing, so slots can be added before
+  //             the video exists.
   const SIGN_PLAYLIST = [
     { type: 'clock', seconds: 30 },
+    { type: 'video', src: 'assets/sign/prototek_1.mp4' },
     { type: 'welcome', seconds: 20 },
+    { type: 'video', src: 'assets/sign/prototek_2.mp4' },
   ];
 
   // ---- Burn-in drift ----
@@ -332,6 +338,7 @@
   // =====================================================================
 
   const welcomeVideo = $('welcome-video');
+  const signVideo = $('sign-video');
   const welcomeStill = $('welcome-still');
 
   function showSlide(id) {
@@ -372,6 +379,25 @@
       welcomeVideo.src = 'assets/sign/welcome_animation.mp4';
       welcomeVideo.play().catch(() => {});
       showSlide('slide-welcome');
+    } else if (item.type === 'video') {
+      const done = () => {
+        if (myGen !== gen) return;
+        releaseVideo(signVideo);
+        next();
+      };
+      signVideo.onended = done;
+      signVideo.onerror = () => {
+        console.log('[sign] skipping', item.src, '(missing or unplayable)');
+        done();
+      };
+      // Only fade the slide in once the video is actually playing, so a
+      // missing file is skipped without flashing an empty black slide.
+      signVideo.onplaying = () => {
+        signVideo.onplaying = null;
+        if (myGen === gen) showSlide('slide-video');
+      };
+      signVideo.src = item.src;
+      signVideo.play().catch(() => {});
     }
   }
 
@@ -382,6 +408,7 @@
   function stopSign() {
     showSlide(null);
     releaseVideo(welcomeVideo);
+    releaseVideo(signVideo);
   }
 
   // ---- Clock hands ----

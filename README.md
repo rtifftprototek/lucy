@@ -58,6 +58,7 @@ Everything the display plays lives in `assets/`:
 | `dog/fall_asleep.mp4` | Plays once when she goes back to sleep |
 | `dog/sleeping_loop.mp4` | Loops the whole time she's asleep |
 | `sign/welcome_animation.mp4` | FABTECH welcome animation, plays once |
+| `sign/prototek_1.mp4`, `sign/prototek_2.mp4` | Prototek animations, each plays once (not uploaded yet) |
 | `sign/welcome_slide.png` | Welcome slide, held after the animation (the animation ends on this exact image) |
 | `clock/clock_face.png` | Clock numerals, 1920x1080 on black |
 | `clock/clock_hand_hour.png`, `clock_hand_minute.png` | Clock hands |
@@ -112,12 +113,16 @@ she's falling asleep, is ignored.
 
 Cycles forever through `SIGN_PLAYLIST`:
 1. **Clock** for 30s.
-2. **FABTECH welcome:** the animation plays, then the slide holds for
+2. **Prototek animation 1:** `assets/sign/prototek_1.mp4`, plays once.
+3. **FABTECH welcome:** the animation plays, then the slide holds for
    20s.
+4. **Prototek animation 2:** `assets/sign/prototek_2.mp4`, plays once.
 
-Motion is ignored in this mode. To add more slides (e.g. a Prototek
-logo animation), add a `.slide` layer in `index.html` and an entry in
-`SIGN_PLAYLIST`.
+- A `video` entry whose file is missing is skipped automatically.
+- Motion is ignored in this mode.
+- To add another video, convert it with `tools/encode_video.sh` into
+  `assets/sign/` and add a `{ type: 'video', src: ... }` entry to
+  `SIGN_PLAYLIST`.
 
 ### Other
 
