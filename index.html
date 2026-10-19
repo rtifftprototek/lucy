@@ -194,10 +194,22 @@
   const DRIFT_PX = 6;                   // max offset in each direction
   const DRIFT_EVERY_MS = 2 * 60 * 1000;
 
+  // ---- Video watchdog (see playVideo) ----
+  const VIDEO_END_STALL_MS = 500;  // stuck in the last second -> treat as ended
+  const VIDEO_STALL_MS = 5000;     // stuck anywhere else -> give up on the clip
+
   // ---- Clock ----
   // Shown in this time zone regardless of the Pi's own time zone setting
   // (handles daylight saving automatically).
   const CLOCK_TIME_ZONE = 'America/Los_Angeles';
+
+  // The numerals sit on a wide rectangle, not a circle, so they aren't
+  // evenly spaced 30deg apart. These are the measured angles (clockwise
+  // from 12) of numerals XII, I, II ... XI on clock_face.png, plus XII
+  // again at 360. The hands move between these so they point at the
+  // right numeral. Re-measure if the clock face artwork changes.
+  const NUMERAL_ANGLES = [0, 51.6, 68.3, 90, 111.7, 128.4, 180,
+                          231.6, 248.3, 270, 291.7, 308.4, 360];
 
   // =====================================================================
 
@@ -219,9 +231,55 @@
     v.onended = null;
     v.onerror = null;
     v.onplaying = null;
+    clearInterval(v.watchdog);
     v.pause();
     v.removeAttribute('src');
     v.load(); // frees the decoder
+  }
+
+  // Plays `src` once in video element `v` and calls onDone(failed)
+  // exactly once when it's over - normally on the 'ended' event.
+  //
+  // Chromium on the Pi sometimes stalls on a video's last frame and never
+  // fires 'ended', which would leave the display frozen. So a watchdog
+  // also checks playback is still moving: stuck within the last second
+  // of the clip counts as finished; stuck anywhere else for
+  // VIDEO_STALL_MS counts as failed. Either way, the show goes on.
+  function playVideo(v, src, label, { onDone, onPlaying = null }) {
+    let finished = false;
+    const finish = (failed) => {
+      if (finished) return;
+      finished = true;
+      clearInterval(v.watchdog);
+      onDone(failed);
+    };
+    let lastTime = -1;
+    let lastProgress = Date.now();
+    clearInterval(v.watchdog);
+    v.watchdog = setInterval(() => {
+      if (v.currentTime !== lastTime) {
+        lastTime = v.currentTime;
+        lastProgress = Date.now();
+        return;
+      }
+      const stuckMs = Date.now() - lastProgress;
+      const nearEnd = v.duration > 0 && v.currentTime >= v.duration - 1;
+      if (nearEnd && stuckMs >= VIDEO_END_STALL_MS) {
+        console.warn('[video] stuck at end of', label, '- moving on');
+        finish(false);
+      } else if (stuckMs >= VIDEO_STALL_MS) {
+        console.error('[video] stalled on', label, 'at', v.currentTime.toFixed(1), 's - moving on');
+        finish(true);
+      }
+    }, 250);
+    v.onended = () => finish(false);
+    v.onerror = () => {
+      console.error('[video] could not play', label);
+      finish(true);
+    };
+    v.onplaying = onPlaying;
+    v.src = src;
+    v.play().catch(() => {});
   }
 
   // =====================================================================
@@ -239,24 +297,23 @@
     if (myGen !== gen) return;
     console.log('[dog] play', key);
     const next = players[1 - activePlayer];
-    next.onended = () => { if (myGen === gen) onEnded(); };
-    next.onerror = () => {
-      // A missing or unplayable file shouldn't freeze Lucy - log it and
-      // move on as if the clip had finished.
-      console.error('[dog] could not play', DOG_CLIPS[key]);
-      setTimeout(() => { if (myGen === gen) onEnded(); }, 1000);
-    };
-    next.onplaying = () => {
-      next.onplaying = null;
-      if (myGen !== gen) return;
-      const prev = players[activePlayer];
-      next.classList.add('showing');
-      prev.classList.remove('showing');
-      releaseVideo(prev);
-      activePlayer = 1 - activePlayer;
-    };
-    next.src = DOG_CLIPS[key];
-    next.play().catch(() => {});
+    playVideo(next, DOG_CLIPS[key], key, {
+      // A missing or unplayable file shouldn't freeze Lucy - move on as
+      // if the clip had finished (after a pause, so a broken file can't
+      // spin in a tight loop).
+      onDone: (failed) => {
+        setTimeout(() => { if (myGen === gen) onEnded(); }, failed ? 1000 : 0);
+      },
+      onPlaying: () => {
+        next.onplaying = null;
+        if (myGen !== gen) return;
+        const prev = players[activePlayer];
+        next.classList.add('showing');
+        prev.classList.remove('showing');
+        releaseVideo(prev);
+        activePlayer = 1 - activePlayer;
+      },
+    });
   }
 
   function wakeUp(myGen) {
@@ -376,13 +433,7 @@
       // it flashes up before the animation's first (black) frame.
       welcomeStill.style.visibility = 'hidden';
       welcomeVideo.style.visibility = 'visible';
-      welcomeVideo.onended = hold;
-      welcomeVideo.onerror = () => {
-        console.error('[sign] could not play welcome animation');
-        hold();
-      };
-      welcomeVideo.src = 'assets/sign/welcome_animation.mp4';
-      welcomeVideo.play().catch(() => {});
+      playVideo(welcomeVideo, 'assets/sign/welcome_animation.mp4', 'welcome', { onDone: hold });
       showSlide('slide-welcome');
     } else if (item.type === 'video') {
       const done = () => {
@@ -390,19 +441,15 @@
         releaseVideo(signVideo);
         next();
       };
-      signVideo.onended = done;
-      signVideo.onerror = () => {
-        console.log('[sign] skipping', item.src, '(missing or unplayable)');
-        done();
-      };
       // Only fade the slide in once the video is actually playing, so a
       // missing file is skipped without flashing an empty black slide.
-      signVideo.onplaying = () => {
-        signVideo.onplaying = null;
-        if (myGen === gen) showSlide('slide-video');
-      };
-      signVideo.src = item.src;
-      signVideo.play().catch(() => {});
+      playVideo(signVideo, item.src, item.src, {
+        onDone: done,
+        onPlaying: () => {
+          signVideo.onplaying = null;
+          if (myGen === gen) showSlide('slide-video');
+        },
+      });
     }
   }
 
@@ -427,9 +474,17 @@
     const h = parts.hour % 12;
     const m = parts.minute;
     const s = parts.second;
-    $('hand-hour').style.transform = `rotate(${(h + m / 60) * 30}deg)`;
-    $('hand-minute').style.transform = `rotate(${(m + s / 60) * 6}deg)`;
-    $('hand-second').style.transform = `rotate(${s * 6}deg)`;
+    $('hand-hour').style.transform = `rotate(${dialAngle(h + m / 60)}deg)`;
+    $('hand-minute').style.transform = `rotate(${dialAngle((m + s / 60) / 5)}deg)`;
+    $('hand-second').style.transform = `rotate(${dialAngle(s / 5)}deg)`;
+  }
+
+  // Angle for a position on the dial in hours (0 = XII, 3 = III, 11.5 =
+  // halfway between XI and XII), interpolated between NUMERAL_ANGLES.
+  function dialAngle(hours) {
+    const i = Math.floor(hours) % 12;
+    const f = hours - Math.floor(hours);
+    return NUMERAL_ANGLES[i] + (NUMERAL_ANGLES[i + 1] - NUMERAL_ANGLES[i]) * f;
   }
   setInterval(updateClock, 1000);
   updateClock();
