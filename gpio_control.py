@@ -2,24 +2,21 @@
 """
 Trade show display - GPIO control
 
-Purely button-driven mode switching (no automatic timer) combined with
-motion-triggered eye animation. Any real motion detection immediately
-interrupts whatever's showing and runs the eyes' motion sequence in the
-web page (waking -> idle -> back into the ambient sleeping/idle cycle) -
-but only if at least MIN_MOTION_INTERVAL_SECONDS has passed since the
-last accepted trigger, so continuous nearby motion (e.g. someone
-fidgeting right next to the sensor during bench testing) doesn't
-restart the sequence on every single pulse.
+The mode button toggles the web page between dog mode and digital sign
+mode. The PIR sensor reports motion, which can wake Lucy when she's
+asleep in dog mode (index.html decides whether a given motion counts).
+Motion triggers less than MIN_MOTION_INTERVAL_SECONDS apart are dropped,
+so continuous nearby motion (e.g. someone fidgeting right next to the
+sensor during bench testing) doesn't flood the page.
 
 This script writes {motionSeq, assetIndex, seq} to state.json.
 `motionSeq` increments on every ACCEPTED motion detection (i.e. one
 that passed the cooldown check) - the SR602 itself also has its own
-~5s built-in blocking time between raw pulses, so the two together
-mean triggers are spaced at least MIN_MOTION_INTERVAL_SECONDS apart in
-practice. `assetIndex` is which of the four main modes should show
-right now; `seq` increments on every button press. index.html polls
-this file twice a second and reacts to either counter changing. All
-the actual eye-clip chaining/timing lives in that JS.
+~5s built-in blocking time between raw pulses. `seq` increments on
+every button press; `assetIndex` tracks which of the two modes should
+be showing. index.html polls this file twice a second and reacts to
+either counter changing. All the actual clip chaining/timing lives in
+that JS.
 
 Wiring (BCM numbering):
   Mode button : GPIO17 -> button -> GND       (uses internal pull-up)
@@ -36,7 +33,7 @@ from gpiozero import Button, MotionSensor
 
 STATE_FILE = Path(__file__).parent / "state.json"
 
-ROTATION_LENGTH = 4  # MAIN_MODES length in index.html - keep in sync
+ROTATION_LENGTH = 2  # MODES length in index.html (dog, sign) - keep in sync
 MIN_MOTION_INTERVAL_SECONDS = 5  # ignore new triggers faster than this
 
 mode_button = Button(17, pull_up=True, bounce_time=0.05)

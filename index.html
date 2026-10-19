@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Trade Show Display</title>
+<title>Lucy</title>
 <style>
   html, body {
     margin: 0;
@@ -15,59 +15,79 @@
   }
 
   /*
-    Panel displays natively in landscape at 1920x1080 - no rotation
-    needed. Everything below sizes itself off the viewport (100vw/100vh)
-    rather than a fixed pixel resolution, so it doesn't need updating
-    again if the actual output resolution ever turns out to be
-    something else.
+    Everything is laid out for a 1920x1080 landscape canvas, sized off
+    the viewport (vw/vh) rather than fixed pixels. The 5.5" OLED is
+    natively portrait; kiosk-display.service rotates the output so this
+    page still sees 1920x1080.
   */
-  .mode {
+
+  /* Slow burn-in drift: the whole stage moves a few pixels every couple
+     of minutes so nothing bright sits on exactly the same OLED pixels
+     for hours. Too slow and small to notice. See DRIFT_* in the script. */
+  #stage {
     position: absolute;
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
-    display: none;
+    inset: 0;
+    transition: transform 20s ease-in-out;
   }
 
+  .mode {
+    position: absolute;
+    inset: 0;
+    display: none;
+  }
   .mode.active {
     display: block;
   }
 
-  /* ---- Animation mode (sleeping/idle cycle + motion-triggered awake sequence) ---- */
-  #mode-animation video,
-  #mode-animation img {
+  /* ---- Dog mode ----
+     Two stacked video players. The next clip loads in the hidden one and
+     only becomes visible once it's actually playing, so there's never a
+     black flash between clips. */
+  #mode-dog video {
+    position: absolute;
+    inset: 0;
     width: 100vw;
     height: 100vh;
     object-fit: cover;
-    display: block;
+    visibility: hidden;
   }
-  #eyes-still {
-    position: absolute;
-    top: 0;
-    left: 0;
-    display: none;
+  #mode-dog video.showing {
+    visibility: visible;
   }
 
-  /* ---- Clock mode ---- */
-  #mode-clock {
-    background: #000;
-  }
-  #mode-clock img {
+  /* ---- Digital sign mode ----
+     Each slide is a full-screen layer; the active one fades in. */
+  .slide {
     position: absolute;
-    top: 0;
-    left: 0;
+    inset: 0;
+    opacity: 0;
+    transition: opacity 0.8s ease;
+  }
+  .slide.showing {
+    opacity: 1;
+  }
+  .slide video,
+  .slide img.full {
+    position: absolute;
+    inset: 0;
     width: 100vw;
     height: 100vh;
+    object-fit: cover;
   }
-  /* Hands are square images (see README for spec) centered on the same
-     point as the clock face's center point. Adjust --clock-cx/--clock-cy
-     below (as percentages of viewport width/height) to match your face
-     artwork's actual center point if it isn't dead-center. */
-  #mode-clock {
+
+  /* ---- Clock slide ----
+     clock_face.png is 1920x1080 with the dial centered. The hands and
+     center cap are square images with the pivot at the image center,
+     pointing to 12. --hand-size and --center-size are the sizes of those
+     squares; tweak them to make the hands longer/shorter or the cap
+     bigger/smaller. (At the designer's original scale both would be
+     24.32vw, but the hands looked stubby on this wide dial.) Adjust
+     --clock-cx/--clock-cy if the dial's center ever moves. */
+  #slide-clock {
     --clock-cx: 50vw;
     --clock-cy: 50vh;
-    --hand-size: 32vw; /* width/height of the square hand images, as a share of viewport width */
+    --hand-size: 32vw;
+    --center-size: 24.32vw;
   }
   .hand {
     position: absolute;
@@ -76,15 +96,6 @@
     left: calc(var(--clock-cx) - (var(--hand-size) / 2));
     top: calc(var(--clock-cy) - (var(--hand-size) / 2));
     transform-origin: center center;
-    pointer-events: none;
-  }
-
-  /* Sits on top of the hands, covering where they converge - like a
-     clock's center cap. Optional: silently hidden if the file is
-     missing (see onerror on the img tag below). Adjust --center-size
-     if the logo looks too big/small relative to the hands. */
-  #mode-clock {
-    --center-size: 14vw;
   }
   #clock-center {
     position: absolute;
@@ -92,23 +103,6 @@
     height: var(--center-size);
     left: calc(var(--clock-cx) - (var(--center-size) / 2));
     top: calc(var(--clock-cy) - (var(--center-size) / 2));
-    pointer-events: none;
-  }
-
-  /* ---- Logo mode ---- */
-  #mode-logo video {
-    width: 100vw;
-    height: 100vh;
-    object-fit: cover;
-    display: block;
-  }
-
-  /* ---- Capabilities mode ---- */
-  #mode-capabilities video {
-    width: 100vw;
-    height: 100vh;
-    object-fit: cover;
-    display: block;
   }
 </style>
 </head>
@@ -116,269 +110,278 @@
 
 <div id="stage">
 
-  <div id="mode-animation" class="mode">
-    <video id="eyes-video" muted playsinline></video>
-    <img id="eyes-still" src="assets/eyes_sleeping_still.png" alt="">
+  <div id="mode-dog" class="mode">
+    <video id="dog-video-a" muted playsinline preload="auto"></video>
+    <video id="dog-video-b" muted playsinline preload="auto"></video>
   </div>
 
-  <div id="mode-clock" class="mode">
-    <img src="assets/clock_face.png" alt="">
-    <img class="hand" id="hand-hour" src="assets/clock_hand_hour.png" alt="" onerror="this.style.display='none'">
-    <img class="hand" id="hand-minute" src="assets/clock_hand_minute.png" alt="" onerror="this.style.display='none'">
-    <img class="hand" id="hand-second" src="assets/clock_hand_second.png" alt="" onerror="this.style.display='none'">
-    <img id="clock-center" src="assets/clock_center.png" alt="" onerror="this.style.display='none'">
-  </div>
-
-  <div id="mode-logo" class="mode">
-    <video id="logo-video" muted playsinline></video>
-  </div>
-
-  <div id="mode-capabilities" class="mode">
-    <video id="capabilities-video" muted playsinline></video>
+  <div id="mode-sign" class="mode">
+    <div id="slide-clock" class="slide">
+      <img class="full" src="assets/clock/clock_face.png" alt="">
+      <img class="hand" id="hand-hour" src="assets/clock/clock_hand_hour.png" alt="" onerror="this.style.display='none'">
+      <img class="hand" id="hand-minute" src="assets/clock/clock_hand_minute.png" alt="" onerror="this.style.display='none'">
+      <img class="hand" id="hand-second" src="assets/clock/clock_hand_second.png" alt="" onerror="this.style.display='none'">
+      <img id="clock-center" src="assets/clock/clock_center.png" alt="" onerror="this.style.display='none'">
+    </div>
+    <div id="slide-welcome" class="slide">
+      <img class="full" id="welcome-still" src="assets/sign/welcome_slide.png" alt="">
+      <video id="welcome-video" muted playsinline preload="auto"></video>
+    </div>
   </div>
 
 </div>
 
 <script>
 (function () {
-  const MODES = ['animation', 'clock', 'logo', 'capabilities'];
-  // The modes cycled by the button, in order.
-  const MAIN_MODES = ['clock', 'logo', 'animation', 'capabilities'];
+  // =====================================================================
+  // Settings - all easy to retune
+  // =====================================================================
 
-  // How many times to repeat the awake clip back-to-back during the
-  // ambient sleeping/idle cycle, how long (in ms) to hold on the static
-  // still image before waking, and the minimum time motion must be
-  // "resting" before a new trigger is even allowed to interrupt - all
-  // easy to retune.
-  const AWAKE_LOOP_COUNT = 3;
-  const STILL_HOLD_MIN_MS = 60000;   // 1 minute
-  const STILL_HOLD_MAX_MS = 300000;  // 5 minutes
-  const MIN_REST_BEFORE_INTERRUPT_MS = 10000; // 10 seconds
+  // The button toggles between these, in this order. The first one is
+  // what the display boots into.
+  const MODES = ['dog', 'sign'];
+
+  // ---- Dog mode ----
+  const DOG_CLIPS = {
+    sleeping: 'assets/dog/sleeping_loop.mp4',
+    wakeUp: 'assets/dog/wake_up.mp4',
+    fallAsleep: 'assets/dog/fall_asleep.mp4',
+    idle: 'assets/dog/idle_loop.mp4',
+    lookAround: 'assets/dog/look_around.mp4',
+    perkUp: 'assets/dog/perk_up.mp4',
+  };
+
+  // While awake, Lucy plays a random mix of these until the awake time
+  // (below) is used up. Higher weight = picked more often. The idle loop
+  // always plays at least once per awake period, and the same clip never
+  // plays twice in a row.
+  const AWAKE_ACTIONS = [
+    { clip: 'idle', weight: 2 },
+    { clip: 'lookAround', weight: 1 },
+    { clip: 'perkUp', weight: 1 },
+  ];
+  const AWAKE_MIN_MS = 45 * 1000;
+  const AWAKE_MAX_MS = 90 * 1000;
+
+  // How long she sleeps before waking up on her own.
+  const SLEEP_MIN_MS = 3 * 60 * 1000;
+  const SLEEP_MAX_MS = 8 * 60 * 1000;
+
+  // Motion only wakes her once she's been asleep (sleeping loop playing)
+  // at least this long, so she can't be bounced straight back awake the
+  // moment she dozes off.
+  const MIN_SLEEP_BEFORE_MOTION_MS = 10 * 1000;
+
+  // ---- Digital sign mode ----
+  // Cycles through these in order, forever. Types:
+  //   clock   - the analog clock, shown for `seconds`
+  //   welcome - plays the welcome animation once, then holds on the
+  //             welcome slide for `seconds`
+  // To add more slides later (e.g. a Prototek logo animation), add a
+  // .slide layer in the HTML above and an entry here.
+  const SIGN_PLAYLIST = [
+    { type: 'clock', seconds: 30 },
+    { type: 'welcome', seconds: 20 },
+  ];
+
+  // ---- Burn-in drift ----
+  const DRIFT_PX = 6;                   // max offset in each direction
+  const DRIFT_EVERY_MS = 2 * 60 * 1000;
+
+  // =====================================================================
+
+  const $ = (id) => document.getElementById(id);
+  const randBetween = (min, max) => min + Math.random() * (max - min);
 
   let currentMode = null;
-  let modeIndex = 0;
-  let lastMotionSeq = null; // last-seen motion-trigger counter
-  let lastSeq = null;       // last-seen button-press sequence number
-  let ambientTimer = null;  // pending "wake from still image" timer
-  let sequenceGen = 0;      // bumped on every interrupt to invalidate in-flight chains
-  let restingSince = null;  // timestamp we entered sleeping/still - null whenever not resting
+  // Bumped whenever the current sequence is abandoned (mode switch,
+  // motion wake). Every pending callback checks it and quietly does
+  // nothing if it's stale, so nothing ever needs cancelling one by one.
+  let gen = 0;
+  let timer = null;
 
-  // logo/capabilities are simple: one clip, looped, same on every entry.
-  // The eyes (animation mode) are handled separately below, since they
-  // involve a longer chained sequence with a still image and a random
-  // hold, not just one looping clip.
-  const SIMPLE_VIDEO_SOURCES = {
-    logo: { el: () => document.getElementById('logo-video'), src: 'assets/logo.mp4' },
-    capabilities: { el: () => document.getElementById('capabilities-video'), src: 'assets/capabilities.mp4' },
-  };
-
-  // Every mode's associated video element, if it has one - used generically
-  // to pause/release whatever we're leaving, regardless of mode.
-  const MODE_VIDEO_EL = {
-    animation: () => document.getElementById('eyes-video'),
-    logo: () => document.getElementById('logo-video'),
-    capabilities: () => document.getElementById('capabilities-video'),
-  };
-
-  const EYE_CLIPS = {
-    sleeping: 'assets/eyes_sleeping.mp4',
-    waking: 'assets/eyes_waking.mp4',
-    awake: 'assets/eyes_awake.mp4',
-    idle: 'assets/eyes_idle.mp4',
-  };
-
-  function clearAmbientTimer() {
-    if (ambientTimer) {
-      clearTimeout(ambientTimer);
-      ambientTimer = null;
-    }
+  function clearTimer() {
+    if (timer) { clearTimeout(timer); timer = null; }
   }
 
-  function showEyesVideo() {
-    document.getElementById('eyes-still').style.display = 'none';
-    document.getElementById('eyes-video').style.display = 'block';
-  }
-
-  // Shows the static still image and releases the video element's
-  // decoder while it's up (nothing to decode during a still image).
-  function showEyesStill() {
-    console.log('[eyes] SHOW STILL IMAGE');
-    const v = document.getElementById('eyes-video');
+  function releaseVideo(v) {
     v.onended = null;
+    v.onerror = null;
+    v.onplaying = null;
     v.pause();
     v.removeAttribute('src');
-    v.load();
-    v.style.display = 'none';
-    document.getElementById('eyes-still').style.display = 'block';
+    v.load(); // frees the decoder
   }
 
-  // Plays one eye clip, but only if `gen` still matches the current
-  // sequenceGen - if something else (a new motion trigger, a mode
-  // change) has since bumped it, this call is stale and does nothing.
-  // This is what lets us "always interrupt immediately, even mid-
-  // sequence" without having to manually track and cancel every
-  // possible pending video/timer callback individually.
-  function playEyeClipGen(key, gen, { loop = false, onEnded = null } = {}) {
-    if (gen !== sequenceGen) {
-      console.log('[eyes] SKIP (stale)', key, 'gen', gen, 'current', sequenceGen);
+  // =====================================================================
+  // Dog mode
+  // =====================================================================
+
+  const players = [$('dog-video-a'), $('dog-video-b')];
+  let activePlayer = 0;
+  let dogState = null;     // 'waking' | 'awake' | 'fallingAsleep' | 'asleep'
+  let asleepSince = null;  // when the sleeping loop started, else null
+
+  // Plays one dog clip in the hidden player and swaps it in once it's
+  // actually playing. Calls onEnded when it finishes (unless stale).
+  function playDogClip(key, myGen, onEnded) {
+    if (myGen !== gen) return;
+    console.log('[dog] play', key);
+    const next = players[1 - activePlayer];
+    next.onended = () => { if (myGen === gen) onEnded(); };
+    next.onerror = () => {
+      // A missing or unplayable file shouldn't freeze Lucy - log it and
+      // move on as if the clip had finished.
+      console.error('[dog] could not play', DOG_CLIPS[key]);
+      setTimeout(() => { if (myGen === gen) onEnded(); }, 1000);
+    };
+    next.onplaying = () => {
+      next.onplaying = null;
+      if (myGen !== gen) return;
+      const prev = players[activePlayer];
+      next.classList.add('showing');
+      prev.classList.remove('showing');
+      releaseVideo(prev);
+      activePlayer = 1 - activePlayer;
+    };
+    next.src = DOG_CLIPS[key];
+    next.play().catch(() => {});
+  }
+
+  function wakeUp(myGen) {
+    if (myGen !== gen) return;
+    console.log('[dog] === waking up ===');
+    clearTimer();
+    dogState = 'waking';
+    asleepSince = null;
+    playDogClip('wakeUp', myGen, () => {
+      dogState = 'awake';
+      const awakeUntil = Date.now() + randBetween(AWAKE_MIN_MS, AWAKE_MAX_MS);
+      playAwakeAction(myGen, awakeUntil, null, false);
+    });
+  }
+
+  function pickAwakeAction(last) {
+    const options = AWAKE_ACTIONS.filter(a => a.clip !== last);
+    let r = Math.random() * options.reduce((sum, a) => sum + a.weight, 0);
+    for (const a of options) {
+      r -= a.weight;
+      if (r <= 0) return a.clip;
+    }
+    return options[options.length - 1].clip;
+  }
+
+  function playAwakeAction(myGen, awakeUntil, last, idlePlayed) {
+    if (myGen !== gen) return;
+    if (Date.now() >= awakeUntil && idlePlayed) {
+      fallAsleep(myGen);
       return;
     }
-    console.log('[eyes] PLAY', key, 'gen', gen, loop ? '(loop)' : '(once)');
-    showEyesVideo();
-    const v = document.getElementById('eyes-video');
-    v.onended = () => {
-      if (gen !== sequenceGen) return;
-      if (loop) {
-        v.currentTime = 0;
-        v.play().catch(() => {});
-      } else if (onEnded) {
-        onEnded();
-      }
-    };
-    v.src = EYE_CLIPS[key];
-    v.currentTime = 0;
-    v.play().catch(() => {});
-  }
-
-  // Plays the awake clip `remaining` more times back-to-back, then
-  // calls onDone.
-  function playAwakeNTimes(gen, remaining, onDone) {
-    if (gen !== sequenceGen) return;
-    if (remaining <= 0) { onDone(); return; }
-    playEyeClipGen('awake', gen, {
-      onEnded: () => playAwakeNTimes(gen, remaining - 1, onDone),
+    // Out of time but the idle loop hasn't played yet - play it now.
+    const clip = Date.now() >= awakeUntil ? 'idle' : pickAwakeAction(last);
+    playDogClip(clip, myGen, () => {
+      playAwakeAction(myGen, awakeUntil, clip, idlePlayed || clip === 'idle');
     });
   }
 
-  // The default/ambient sequence, repeating forever until interrupted:
-  // sleeping clip -> static still image (random hold) -> waking clip ->
-  // awake clip x AWAKE_LOOP_COUNT -> back to sleeping clip, repeat.
-  function runAmbientStep(gen) {
-    if (gen !== sequenceGen) return;
-    console.log('[eyes] --- ambient step: sleeping ---');
-    restingSince = Date.now();
-    playEyeClipGen('sleeping', gen, {
-      onEnded: () => {
-        if (gen !== sequenceGen) return;
-        showEyesStill();
-        const holdMs = STILL_HOLD_MIN_MS + Math.random() * (STILL_HOLD_MAX_MS - STILL_HOLD_MIN_MS);
-        ambientTimer = setTimeout(() => {
-          if (gen !== sequenceGen) return;
-          restingSince = null; // no longer restful once waking starts
-          playEyeClipGen('waking', gen, {
-            onEnded: () => {
-              if (gen !== sequenceGen) return;
-              playAwakeNTimes(gen, AWAKE_LOOP_COUNT, () => runAmbientStep(gen));
-            },
-          });
-        }, holdMs);
-      },
+  function fallAsleep(myGen) {
+    console.log('[dog] === falling asleep ===');
+    dogState = 'fallingAsleep';
+    playDogClip('fallAsleep', myGen, () => {
+      dogState = 'asleep';
+      asleepSince = Date.now();
+      const sleepMs = randBetween(SLEEP_MIN_MS, SLEEP_MAX_MS);
+      console.log('[dog] sleeping for', Math.round(sleepMs / 1000), 's');
+      timer = setTimeout(() => wakeUp(myGen), sleepMs);
+      loopSleeping(myGen);
     });
   }
 
-  function startAmbientCycle() {
-    sequenceGen++;
-    const gen = sequenceGen;
-    setMode('animation');
-    runAmbientStep(gen);
+  function loopSleeping(myGen) {
+    playDogClip('sleeping', myGen, () => loopSleeping(myGen));
   }
 
-  // The motion-triggered sequence: waking clip -> idle clip -> back into
-  // the ambient sleeping/idle cycle from the top. Always interrupts
-  // immediately, even if a previous sequence (ambient or motion) is
-  // already mid-playback.
-  function triggerMotionSequence() {
-    sequenceGen++;
-    const gen = sequenceGen;
-    console.log('[eyes] === MOTION TRIGGERED, new gen', gen, '===');
-    restingSince = null;
-    clearAmbientTimer();
-    setMode('animation');
-    playEyeClipGen('waking', gen, {
-      onEnded: () => {
-        if (gen !== sequenceGen) return;
-        playEyeClipGen('idle', gen, {
-          onEnded: () => {
-            if (gen !== sequenceGen) return;
-            runAmbientStep(gen);
-          },
-        });
-      },
-    });
-  }
-
-  function setMode(mode) {
-    if (!MODES.includes(mode) || mode === currentMode) return;
-    try {
-      const previousMode = currentMode;
-      currentMode = mode;
-      MODES.forEach(m => {
-        document.getElementById('mode-' + m).classList.toggle('active', m === mode);
-      });
-
-      // Leaving animation mode entirely (not just switching clips within
-      // it) - invalidate any in-flight sequence and reset to the video
-      // view so re-entering later starts clean.
-      if (previousMode === 'animation') {
-        sequenceGen++;
-        clearAmbientTimer();
-        restingSince = null;
-        document.getElementById('eyes-still').style.display = 'none';
-      }
-
-      // Release whatever video we're leaving, so it stops holding the
-      // hardware decoder and frees memory. Generic across all modes,
-      // including animation (eyes), regardless of which clip was playing.
-      const leavingEl = MODE_VIDEO_EL[previousMode];
-      if (leavingEl) {
-        const v = leavingEl();
-        v.onended = null;
-        v.pause();
-        v.removeAttribute('src');
-        v.load();
-      }
-
-      // Simple single-clip modes (logo/capabilities) auto-load and loop
-      // here. Animation mode does NOT auto-load anything here - it's
-      // driven by startAmbientCycle()/triggerMotionSequence() instead.
-      // We handle looping manually (via the 'ended' event) instead of
-      // the native loop attribute throughout, since on this hardware the
-      // native loop's internal seek-and-redecode occasionally stalls,
-      // leaving the video frozen on its last frame.
-      const entering = SIMPLE_VIDEO_SOURCES[mode];
-      if (entering) {
-        const v = entering.el();
-        v.onended = () => {
-          v.currentTime = 0;
-          v.play().catch(() => {});
-        };
-        v.src = entering.src;
-        v.currentTime = 0;
-        v.play().catch(() => {});
-      }
-    } catch (err) {
-      // Never let a failure here (missing element, video API quirk, etc.)
-      // silently kill the caller.
-      console.error('setMode error for', mode, err);
+  function handleMotion() {
+    if (currentMode !== 'dog') {
+      console.log('[motion] ignored - not in dog mode');
+      return;
     }
-  }
-
-  // Shows one of the main modes by index - the animation slot enters the
-  // ambient sleeping/idle cycle.
-  function showMainMode(index) {
-    modeIndex = ((index % MAIN_MODES.length) + MAIN_MODES.length) % MAIN_MODES.length;
-    const mode = MAIN_MODES[modeIndex];
-    if (mode === 'animation') {
-      startAmbientCycle();
+    const sleptMs = asleepSince === null ? -1 : Date.now() - asleepSince;
+    if (dogState === 'asleep' && sleptMs >= MIN_SLEEP_BEFORE_MOTION_MS) {
+      console.log('[motion] waking Lucy');
+      gen++;
+      wakeUp(gen);
     } else {
-      setMode(mode);
+      console.log('[motion] ignored - Lucy is', dogState, '(asleep', sleptMs, 'ms)');
     }
   }
 
-  // Called when the physical button's press count (seq) has changed -
-  // advances to the next mode.
-  function forceNext() {
-    showMainMode(modeIndex + 1);
+  function startDog() {
+    // Entering dog mode always starts with Lucy waking up.
+    wakeUp(gen);
+  }
+
+  function stopDog() {
+    players.forEach(v => { v.classList.remove('showing'); releaseVideo(v); });
+    dogState = null;
+    asleepSince = null;
+  }
+
+  // =====================================================================
+  // Digital sign mode
+  // =====================================================================
+
+  const welcomeVideo = $('welcome-video');
+  const welcomeStill = $('welcome-still');
+
+  function showSlide(id) {
+    document.querySelectorAll('.slide').forEach(s => {
+      s.classList.toggle('showing', s.id === id);
+    });
+  }
+
+  function playSignItem(index, myGen) {
+    if (myGen !== gen) return;
+    const item = SIGN_PLAYLIST[index % SIGN_PLAYLIST.length];
+    const next = () => playSignItem(index + 1, myGen);
+    console.log('[sign] show', item.type);
+
+    if (item.type === 'clock') {
+      updateClock();
+      showSlide('slide-clock');
+      timer = setTimeout(next, item.seconds * 1000);
+    } else if (item.type === 'welcome') {
+      // The animation ends on exactly the welcome slide image, so hiding
+      // the video once it ends leaves the still showing seamlessly.
+      const hold = () => {
+        if (myGen !== gen) return;
+        welcomeStill.style.visibility = 'visible';
+        releaseVideo(welcomeVideo);
+        welcomeVideo.style.visibility = 'hidden';
+        timer = setTimeout(next, item.seconds * 1000);
+      };
+      // The still stays hidden until the animation has finished, otherwise
+      // it flashes up before the animation's first (black) frame.
+      welcomeStill.style.visibility = 'hidden';
+      welcomeVideo.style.visibility = 'visible';
+      welcomeVideo.onended = hold;
+      welcomeVideo.onerror = () => {
+        console.error('[sign] could not play welcome animation');
+        hold();
+      };
+      welcomeVideo.src = 'assets/sign/welcome_animation.mp4';
+      welcomeVideo.play().catch(() => {});
+      showSlide('slide-welcome');
+    }
+  }
+
+  function startSign() {
+    playSignItem(0, gen);
+  }
+
+  function stopSign() {
+    showSlide(null);
+    releaseVideo(welcomeVideo);
   }
 
   // ---- Clock hands ----
@@ -387,72 +390,88 @@
     const h = now.getHours() % 12;
     const m = now.getMinutes();
     const s = now.getSeconds();
-
-    const hourDeg = (h + m / 60) * 30;         // 360/12
-    const minuteDeg = (m + s / 60) * 6;         // 360/60
-    const secondDeg = s * 6;                    // 360/60
-
-    document.getElementById('hand-hour').style.transform = `rotate(${hourDeg}deg)`;
-    document.getElementById('hand-minute').style.transform = `rotate(${minuteDeg}deg)`;
-    document.getElementById('hand-second').style.transform = `rotate(${secondDeg}deg)`;
+    $('hand-hour').style.transform = `rotate(${(h + m / 60) * 30}deg)`;
+    $('hand-minute').style.transform = `rotate(${(m + s / 60) * 6}deg)`;
+    $('hand-second').style.transform = `rotate(${s * 6}deg)`;
   }
   setInterval(updateClock, 1000);
   updateClock();
 
-  // Only accepts a motion trigger if we're genuinely resting (sleeping
-  // clip or still image) AND have been resting for at least
-  // MIN_REST_BEFORE_INTERRUPT_MS - never during waking, the awake loop,
-  // or the motion sequence itself, and never within the first few
-  // seconds of just having fallen asleep.
-  function handleMotionSignal() {
-    const restedMs = restingSince === null ? -1 : Date.now() - restingSince;
-    if (restedMs >= MIN_REST_BEFORE_INTERRUPT_MS) {
-      triggerMotionSequence();
-    } else {
-      console.log('[eyes] motion ignored - not interruptible right now (rested', restedMs, 'ms)');
+  // =====================================================================
+  // Mode switching
+  // =====================================================================
+
+  function setMode(mode) {
+    if (!MODES.includes(mode)) return;
+    try {
+      gen++;
+      clearTimer();
+      if (currentMode === 'dog') stopDog();
+      if (currentMode === 'sign') stopSign();
+      currentMode = mode;
+      console.log('[mode]', mode);
+      MODES.forEach(m => $('mode-' + m).classList.toggle('active', m === mode));
+      if (mode === 'dog') startDog();
+      if (mode === 'sign') startSign();
+    } catch (err) {
+      console.error('setMode error for', mode, err);
     }
   }
 
-  // ---- Mode control (temporary, for bench testing before buttons are wired) ----
-  // Press 1-4 to force a specific mode directly (1 re-enters the ambient
-  // eyes cycle). Press M to simulate a motion trigger (subject to the
-  // same resting-window gate real motion goes through), N to simulate a
-  // button press, for testing without the real hardware wired in.
+  function nextMode() {
+    setMode(MODES[(MODES.indexOf(currentMode) + 1) % MODES.length]);
+  }
+
+  // ---- Burn-in drift ----
+  setInterval(() => {
+    const dx = Math.round(randBetween(-DRIFT_PX, DRIFT_PX));
+    const dy = Math.round(randBetween(-DRIFT_PX, DRIFT_PX));
+    $('stage').style.transform = `translate(${dx}px, ${dy}px)`;
+  }, DRIFT_EVERY_MS);
+
+  // ---- Keyboard (bench testing without the button/sensor) ----
+  // N = button press (switch mode), M = motion, D = dog mode,
+  // S = sign mode, W = wake Lucy now (skips the motion checks).
   window.addEventListener('keydown', (e) => {
-    if (e.key === '1') startAmbientCycle();
-    if (e.key === '2') setMode('clock');
-    if (e.key === '3') setMode('logo');
-    if (e.key === '4') setMode('capabilities');
-    if (e.key.toLowerCase() === 'm') { handleMotionSignal(); }
-    if (e.key.toLowerCase() === 'n') { forceNext(); }
+    const k = e.key.toLowerCase();
+    if (k === 'n') nextMode();
+    if (k === 'm') handleMotion();
+    if (k === 'd') setMode('dog');
+    if (k === 's') setMode('sign');
+    if (k === 'w' && currentMode === 'dog') { gen++; wakeUp(gen); }
   });
 
-  // ---- Mode control (production path, once GPIO button/PIR script is running) ----
-  // gpio_control.py writes {motionSeq, assetIndex, seq} to state.json.
-  // We poll it here: a change in motionSeq means real motion was
-  // detected, so we run it through the resting-window gate; a change in
-  // seq means the physical button was pressed, so we advance to the
-  // next mode.
+  // ---- Button + motion sensor (gpio_control.py -> state.json) ----
+  // A change in `seq` means the button was pressed; a change in
+  // `motionSeq` means the sensor saw someone.
+  let lastSeq = null;
+  let lastMotionSeq = null;
   setInterval(() => {
     fetch('state.json', { cache: 'no-store' })
       .then(r => r.json())
       .then(data => {
         if (!data) return;
-        if (typeof data.motionSeq === 'number' && data.motionSeq !== lastMotionSeq) {
-          const firstRun = lastMotionSeq === null;
-          lastMotionSeq = data.motionSeq;
-          if (!firstRun) handleMotionSignal();
-        }
         if (typeof data.seq === 'number' && data.seq !== lastSeq) {
           const firstRun = lastSeq === null;
           lastSeq = data.seq;
-          if (!firstRun) forceNext();
+          if (!firstRun) nextMode();
+        }
+        if (typeof data.motionSeq === 'number' && data.motionSeq !== lastMotionSeq) {
+          const firstRun = lastMotionSeq === null;
+          lastMotionSeq = data.motionSeq;
+          if (!firstRun) handleMotion();
         }
       })
       .catch(() => {});
   }, 500);
 
-  showMainMode(MAIN_MODES.indexOf('animation')); // boot straight into the ambient eyes cycle
+  // Exposed for debugging from the browser console.
+  window.lucy = {
+    setMode, nextMode, handleMotion,
+    state: () => ({ mode: currentMode, dogState, asleepSince }),
+  };
+
+  setMode(MODES[0]);
 })();
 </script>
 

@@ -1,0 +1,4 @@
+__pycache__/
+*.tmp
+# Written at runtime by gpio_control.py
+state.json

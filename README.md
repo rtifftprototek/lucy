@@ -1,4 +1,4 @@
-# Trade Show Display — Kiosk Starter
+# Lucy — Robot Dog / Trade Show Display
 
 Target canvas: **1920 x 1080 landscape**. All sizing in `index.html`
 uses viewport-relative units (`vw`/`vh`) rather than hardcoded pixels.
@@ -45,68 +45,95 @@ Notes:
 - It's an OLED, so use **pure black (`#000000`) backgrounds** and avoid
   bright static elements (burn-in).
 
-## Asset filenames
+## Assets
 
-Drop these into the `assets/` folder next to `index.html`, using these
-exact names:
+Everything the display plays lives in `assets/`:
 
-| File | Purpose |
+| File | Used for |
 |---|---|
-| `eyes_sleeping.mp4` | Sleeping animation — ambient cycle, step 1 |
-| `eyes_sleeping_still.png` | Static still image — ambient cycle, step 2 (held for a random duration) |
-| `eyes_waking.mp4` | Waking animation — used in both the ambient cycle and the motion sequence |
-| `eyes_awake.mp4` | Awake animation — looped a few times, ambient cycle only |
-| `eyes_idle.mp4` | Idle animation — motion sequence only |
-| `capabilities.mp4` | Capabilities-showcase video |
-| `logo.mp4` | Animated logo video |
-| `clock_face.png` | Static clock background — numerals, ticks |
-| `clock_center.png` | Optional — sits on top of the hands, covering where they meet |
-| `clock_hand_hour.png` | Hour hand |
-| `clock_hand_minute.png` | Minute hand |
-| `clock_hand_second.png` | Optional second hand |
+| `dog/wake_up.mp4` | Plays once whenever Lucy wakes up |
+| `dog/idle_loop.mp4` | Main awake animation (40s) |
+| `dog/look_around.mp4` | Awake action |
+| `dog/perk_up.mp4` | Awake action |
+| `dog/fall_asleep.mp4` | Plays once when she goes back to sleep |
+| `dog/sleeping_loop.mp4` | Loops the whole time she's asleep |
+| `sign/welcome_animation.mp4` | FABTECH welcome animation, plays once |
+| `sign/welcome_slide.png` | Welcome slide, held after the animation (the animation ends on this exact image) |
+| `clock/clock_face.png` | Clock numerals, 1920x1080 on black |
+| `clock/clock_hand_hour.png`, `clock_hand_minute.png` | Clock hands |
+| `clock/clock_center.png` | "P" cap over the middle of the hands |
+| `clock/clock_hand_second.png` | Optional second hand; hidden if the file is missing |
 
-### Hand image spec
+`source_assets/` holds the designer's original exports. The dog clips
+there are MPEG-4 Part 2, which Chromium can't play, so the versions in
+`assets/dog/` are re-encoded copies. Convert any new videos the same way:
 
-Each hand should be exported on a **square transparent canvas, with the
-pivot point exactly at the canvas center**, hand pointing straight up
-(12 o'clock) from center to wherever its tip should reach. This lets
-the code rotate it with a simple CSS `transform: rotate()` around the
-image's own center. If the clock face's true center isn't exactly
-image-center, tell me the offset and I'll adjust `--clock-cx`/
-`--clock-cy` in `index.html`.
+```
+tools/encode_video.sh input.mp4 assets/dog/new_clip.mp4
+```
 
-### Video export settings
+### Asset spec (for the designer)
 
-- **Resolution:** exactly 1920x1080, full screen
-- **Codec:** H.264 (MP4) — hardware-decoded on the Pi 4B
-- **Frame rate:** constant 30fps (not variable)
-- Reasonable bitrate (10-20 Mbps is plenty at this resolution)
+- **Canvas:** 1920x1080 landscape, **pure black (`#000000`)
+  background**. It's an OLED, so avoid bright elements that sit still
+  for long periods (burn-in).
+- **Video:** MP4, H.264, yuv420p, constant 30fps, no audio.
+- **Seamless joins:** every awake clip starts and ends on the same
+  "neutral open eyes" frame, so they can be mixed in any order.
+  Looping clips end on their first frame.
+- **Filenames:** lowercase, no spaces.
+- **Clock hands and cap:** transparent square PNGs, pivot at the exact
+  center, pointing straight up (12 o'clock).
 
 ## Behavior
 
-The display's top-level modes are cycled purely by the physical
-button — **no automatic timer** for switching between clock, logo,
-animation, and capabilities. Within "animation," the eyes run their
-own two-state behavior:
+There are two modes. The **button toggles between them**, and the
+display boots into dog mode.
 
-**Sleeping/idle** (the default — repeats forever on its own, with no
-motion involved):
-1. Plays `eyes_sleeping.mp4` once
-2. Holds on the static `eyes_sleeping_still.png` for a random duration (8-20s, configurable via `STILL_HOLD_MIN_MS`/`STILL_HOLD_MAX_MS` near the top of `index.html`'s script)
-3. Plays `eyes_waking.mp4` once
-4. Plays `eyes_awake.mp4` on repeat a few times (`AWAKE_LOOP_COUNT`, default 3)
-5. Back to step 1, indefinitely
+### Dog mode (Lucy)
 
-**Motion detected** — always interrupts immediately, even mid-sequence, whatever's currently showing (clock, logo, mid-ambient-cycle, anything):
-1. Plays `eyes_waking.mp4` once
-2. Plays `eyes_idle.mp4` once
-3. Re-enters the ambient sleeping/idle cycle from the top
+1. **Wakes up.** `wake_up` plays once.
+2. **Awake period** (random 45–90s, `AWAKE_MIN_MS`/`AWAKE_MAX_MS`):
+   - plays a random mix of the idle loop, look around and perk up
+     (`AWAKE_ACTIONS`, with weights)
+   - the idle loop always plays at least once
+   - the same clip never plays twice in a row
+3. **Falls asleep.** `fall_asleep` plays once.
+4. **Sleeps.** `sleeping_loop` repeats for a random 3–8 minutes
+   (`SLEEP_MIN_MS`/`SLEEP_MAX_MS`), then she wakes on her own (back to
+   step 1).
 
-A single press of the mode button advances to the next of the four
-modes (clock/logo/animation/capabilities). For bench testing with a
-keyboard, press **M** to simulate a motion trigger and **N** to
-simulate a button press. Keys **1-4** force a specific mode directly
-(1 re-enters the ambient eyes cycle).
+**Motion** wakes her straight away (back to step 1), but only while
+she's asleep and has been for at least 10s
+(`MIN_SLEEP_BEFORE_MOTION_MS`). Motion while she's awake, or while
+she's falling asleep, is ignored.
+
+### Digital sign mode
+
+Cycles forever through `SIGN_PLAYLIST`:
+1. **Clock** for 30s.
+2. **FABTECH welcome:** the animation plays, then the slide holds for
+   20s.
+
+Motion is ignored in this mode. To add more slides (e.g. a Prototek
+logo animation), add a `.slide` layer in `index.html` and an entry in
+`SIGN_PLAYLIST`.
+
+### Other
+
+- All timings are constants at the top of the script in `index.html`.
+- The whole picture drifts a few pixels every 2 minutes to spread OLED
+  wear (`DRIFT_*`).
+
+**Bench-testing keys** (with a keyboard plugged in):
+
+| Key | Does |
+|---|---|
+| N | Same as a button press |
+| M | Simulate motion |
+| D | Dog mode |
+| S | Sign mode |
+| W | Wake Lucy now |
 
 ## GPIO: mode button + PIR motion sensor
 
@@ -121,13 +148,11 @@ simulate a button press. Keys **1-4** force a specific mode directly
 | Mode button | GPIO17 (physical pin 11) → button → GND | Uses internal pull-up, no resistor needed |
 | PIR sensor Signal | GPIO27 (physical pin 13) | SR602 module — power from Pi **3.3V** (pin 1) and GND, no level-shifting needed since it accepts 3.3-15V directly |
 
-Every real motion detection increments `motionSeq`, which the page
-treats as "restart the motion sequence from the top" — even if a
-previous sequence or the ambient cycle is already mid-playback. There's
-no held-awake state or timeout to configure — every motion pulse is
-its own independent trigger. (The SR602 has its own ~5s built-in
-blocking time between pulses, so this can't fire faster than that
-regardless.)
+- A button press increments `seq`, and the page switches mode.
+- A motion detection increments `motionSeq`, and the page may wake
+  Lucy (see Behavior).
+- `gpio_control.py` ignores triggers less than 5s apart, and the SR602
+  has its own ~5s blocking time too.
 
 **Install:**
 ```
@@ -204,4 +229,4 @@ risk destabilizing an otherwise-working setup this close to a show.
 
 - Read-only root filesystem overlay, to protect the SD card from
   corruption on a hard power cut via the battery toggle switch.
-- Final review of `capabilities.mp4`'s content/cut.
+- More Prototek logo animations for sign mode, once delivered.
