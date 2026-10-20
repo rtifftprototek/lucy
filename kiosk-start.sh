@@ -24,7 +24,12 @@ OUTPUT=HDMI-A-1
   done
 ) &
 
+# Extra Chromium flags can be set from the service file without editing
+# this script, e.g. Environment=LUCY_CHROMIUM_FLAGS=--disable-accelerated-video-decode
+# (left unquoted on purpose so several flags split into separate args).
+# shellcheck disable=SC2086
 exec /usr/bin/chromium \
+  $LUCY_CHROMIUM_FLAGS \
   --kiosk \
   --ozone-platform=wayland \
   --noerrdialogs \
