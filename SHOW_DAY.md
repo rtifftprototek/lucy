@@ -99,7 +99,8 @@ an Ethernet port need a USB-to-Ethernet adapter.
 
 - **Off:** press the power button (pins 5 + 39). The screen goes dark and the
   Pi shuts down in a few seconds. Wait for the green light on the board
-  to stop flashing before cutting power with the switch.
+  to stop flashing (and the button's light to go out) before cutting
+  power with the switch.
 - **On:** press the power button again, or switch the power back on.
 - Turn the phone hotspot on first, so the clock gets the right time.
 
