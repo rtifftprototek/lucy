@@ -152,8 +152,8 @@ Cycles forever through `SIGN_PLAYLIST`:
 
 | Component | Pin | Notes |
 |---|---|---|
-| Mode button | GPIO17 (physical pin 11) → button → GND | Uses internal pull-up, no resistor needed |
-| PIR sensor Signal | GPIO22 (physical pin 15) | SR602 module — power from Pi **3.3V** (pin 1) and GND (e.g. pin 9), no level-shifting needed since it accepts 3.3-15V directly. Moved from GPIO27/pin 13, which stopped reading the sensor; `PIR_PIN` in `gpio_control.py` and `test_pir.py` |
+| Mode button | GPIO27 (physical pin 13) → button → GND | Uses internal pull-up, no resistor needed |
+| PIR sensor Signal | GPIO22 (physical pin 15) | SR602 module — power from Pi **3.3V** (pin 1) and GND (e.g. pin 9), no level-shifting needed since it accepts 3.3-15V directly. Pins are set by `BUTTON_PIN`/`PIR_PIN` in `gpio_control.py` (and `PIR_PIN` in `test_pir.py`) |
 
 - A button press increments `seq`, and the page switches mode.
 - A motion detection increments `motionSeq`, and the page may wake

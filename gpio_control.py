@@ -19,9 +19,8 @@ either counter changing. All the actual clip chaining/timing lives in
 that JS.
 
 Wiring (BCM numbering):
-  Mode button : GPIO17 -> button -> GND       (uses internal pull-up)
-  PIR sensor  : GPIO22 <- SR602 signal pin    (SR602 powered from 3.3V + GND)
-                (moved from GPIO27, which stopped reading the sensor)
+  Mode button : GPIO27 (pin 13) -> button -> GND   (uses internal pull-up)
+  PIR sensor  : GPIO22 (pin 15) <- SR602 signal    (SR602 powered from 3.3V + GND)
 
 Run as a systemd service (see kiosk-gpio.service) so it starts on boot
 and restarts automatically if it ever crashes.
@@ -36,9 +35,10 @@ STATE_FILE = Path(__file__).parent / "state.json"
 
 ROTATION_LENGTH = 2  # MODES length in index.html (dog, sign) - keep in sync
 MIN_MOTION_INTERVAL_SECONDS = 5  # ignore new triggers faster than this
-PIR_PIN = 22  # BCM number = physical pin 15 (GPIO27 stopped working)
+BUTTON_PIN = 27  # BCM number = physical pin 13
+PIR_PIN = 22  # BCM number = physical pin 15
 
-mode_button = Button(17, pull_up=True, bounce_time=0.05)
+mode_button = Button(BUTTON_PIN, pull_up=True, bounce_time=0.05)
 pir = MotionSensor(PIR_PIN)
 
 state = {
