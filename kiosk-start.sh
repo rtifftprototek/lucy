@@ -3,19 +3,26 @@
 # starts Chromium.
 #
 # The 5.5" OLED panel is natively portrait (1080x1920), so the output is
-# rotated to give the page a 1920x1080 landscape canvas. Right after cage
-# starts, its output isn't always ready yet and wlr-randr fails, which
-# left the screen in portrait - so keep retrying for up to ~10s.
+# rotated to give the page a 1920x1080 landscape canvas.
+#
+# A one-off rotation isn't enough: right after cage starts its output
+# isn't always ready, and the screen can later reset itself to portrait
+# (e.g. if the HDMI-to-MIPI board briefly drops and reconnects). So a
+# background loop checks every couple of seconds and re-applies the
+# rotation whenever it's been lost. systemd stops it along with cage.
 ROTATION="${LUCY_ROTATION:-90}"
-tries=0
-until wlr-randr --output HDMI-A-1 --transform "$ROTATION"; do
-  tries=$((tries + 1))
-  if [ "$tries" -ge 50 ]; then
-    echo "kiosk-start: could not rotate the display" >&2
-    break
-  fi
-  sleep 0.2
-done
+OUTPUT=HDMI-A-1
+
+(
+  while true; do
+    if ! wlr-randr 2>/dev/null | grep -q "Transform: $ROTATION"; then
+      if wlr-randr --output "$OUTPUT" --transform "$ROTATION" 2>/dev/null; then
+        echo "kiosk-start: rotated $OUTPUT to $ROTATION"
+      fi
+    fi
+    sleep 2
+  done
+) &
 
 exec /usr/bin/chromium \
   --kiosk \

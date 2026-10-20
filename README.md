@@ -33,8 +33,9 @@ fixes are needed to make it work:
 2. **Rotation.**
    - `kiosk-display.service` starts `kiosk-start.sh` inside `cage`. The
      script runs `wlr-randr` to rotate the output by `LUCY_ROTATION`
-     (90; use 270 if the panel is mounted the other way), retrying
-     until the output is ready, then starts Chromium.
+     (90; use 270 if the panel is mounted the other way), then starts
+     Chromium. A background loop re-applies the rotation every 2s if
+     it's lost; the panel occasionally resets to portrait on its own.
    - Needs `sudo apt install -y wlr-randr`.
 
 Notes:
