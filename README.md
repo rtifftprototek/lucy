@@ -66,7 +66,6 @@ Everything the display plays lives in `assets/`:
 | `clock/clock_face.png` | Clock numerals, 1920x1080 on black |
 | `clock/clock_hand_hour.png`, `clock_hand_minute.png` | Clock hands |
 | `clock/clock_center.png` | "P" cap over the middle of the hands |
-| `clock/clock_hand_second.png` | Optional second hand; hidden if the file is missing |
 
 `source_assets/` holds the designer's original exports. The dog clips
 there are MPEG-4 Part 2, which Chromium can't play, so the versions in

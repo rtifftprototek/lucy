@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <title>Lucy</title>
+<link rel="icon" href="data:,"> <!-- no tab icon, so the browser doesn't request favicon.ico -->
 <style>
   html, body {
     margin: 0;
@@ -120,7 +121,6 @@
       <img class="full" src="assets/clock/clock_face.png" alt="">
       <img class="hand" id="hand-hour" src="assets/clock/clock_hand_hour.png" alt="" onerror="this.style.display='none'">
       <img class="hand" id="hand-minute" src="assets/clock/clock_hand_minute.png" alt="" onerror="this.style.display='none'">
-      <img class="hand" id="hand-second" src="assets/clock/clock_hand_second.png" alt="" onerror="this.style.display='none'">
       <img id="clock-center" src="assets/clock/clock_center.png" alt="" onerror="this.style.display='none'">
     </div>
     <div id="slide-video" class="slide">
@@ -493,7 +493,6 @@
     const s = parts.second;
     $('hand-hour').style.transform = `rotate(${dialAngle(h + m / 60)}deg)`;
     $('hand-minute').style.transform = `rotate(${dialAngle((m + s / 60) / 5)}deg)`;
-    $('hand-second').style.transform = `rotate(${dialAngle(s / 5)}deg)`;
   }
 
   // Angle for a position on the dial in hours (0 = XII, 3 = III, 11.5 =
