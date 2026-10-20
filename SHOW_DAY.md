@@ -97,7 +97,7 @@ an Ethernet port need a USB-to-Ethernet adapter.
 
 ## Turning Lucy on and off
 
-- **Off:** press the power button (pins 5 + ground). The screen goes dark and the
+- **Off:** press the power button (pins 5 + 39). The screen goes dark and the
   Pi shuts down in a few seconds. Wait for the green light on the board
   to stop flashing before cutting power with the switch.
 - **On:** press the power button again, or switch the power back on.
