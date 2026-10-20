@@ -159,8 +159,8 @@ Cycles forever through `SIGN_PLAYLIST`:
 | Component | Pin | Notes |
 |---|---|---|
 | Mode button | GPIO27 (physical pin 13) → button → GND | Uses internal pull-up, no resistor needed |
-| PIR sensor Signal | GPIO22 (physical pin 15) | SR602 module — power from Pi **3.3V** (pin 1) and GND (e.g. pin 9), no level-shifting needed since it accepts 3.3-15V directly. Pins are set by `BUTTON_PIN`/`PIR_PIN` in `gpio_control.py` (and `PIR_PIN` in `test_pir.py`) |
-| Power button (momentary) | GPIO3 (physical pin 5) → button → GND (pin 6) | Press to shut down cleanly; press again to boot. Needs `dtoverlay=gpio-shutdown` in `/boot/firmware/config.txt`. Pin 4 next to it is 5V, so take care |
+| PIR sensor Signal | GPIO22 (physical pin 15) | SR602 module — power from Pi **3.3V** (pin 1) and GND (pin 6), no level-shifting needed since it accepts 3.3-15V directly. Pins are set by `BUTTON_PIN`/`PIR_PIN` in `gpio_control.py` (and `PIR_PIN` in `test_pir.py`) |
+| Power button (momentary) | GPIO3 (physical pin 5) → button → any free GND (e.g. pin 9, 14, 20 or 25) | Press to shut down cleanly; press again to boot. Needs `dtoverlay=gpio-shutdown` in `/boot/firmware/config.txt`. Pin 4 next to it is 5V, so take care |
 
 - A button press increments `seq`, and the page switches mode.
 - A motion detection increments `motionSeq`, and the page may wake
