@@ -215,7 +215,7 @@
 
   // Copy console messages to serve.py, which prints them to the system
   // log, so playback can be followed on the Pi with:
-  //   journalctl -u kiosk-server -f
+  //   sudo journalctl -u kiosk-server -f
   ['log', 'warn', 'error'].forEach(level => {
     const original = console[level].bind(console);
     console[level] = (...args) => {

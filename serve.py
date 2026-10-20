@@ -15,7 +15,7 @@ from http.server import HTTPServer, SimpleHTTPRequestHandler
 class NoCacheHandler(SimpleHTTPRequestHandler):
     def do_POST(self):
         # index.html posts its console messages here so they show up in
-        # the system log: journalctl -u kiosk-server -f
+        # the system log: sudo journalctl -u kiosk-server -f
         if self.path != "/log":
             self.send_error(404)
             return

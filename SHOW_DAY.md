@@ -101,7 +101,7 @@ an Ethernet port need a USB-to-Ethernet adapter.
 |---|---|
 | Restart just the display | `sudo systemctl restart kiosk-display` |
 | Restart everything (display, server, button/motion) | `sudo systemctl restart kiosk-server kiosk-display kiosk-gpio` |
-| See button/motion events live (Ctrl+C to stop) | `journalctl -u kiosk-gpio -f` |
+| See button/motion events live (Ctrl+C to stop) | `sudo journalctl -u kiosk-gpio -f` |
 | Check whether the services are running | `systemctl status kiosk-display kiosk-server kiosk-gpio` |
 | Reboot the Pi | `sudo reboot` |
 | Shut down safely before unplugging | `sudo shutdown now` |

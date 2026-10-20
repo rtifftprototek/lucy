@@ -247,7 +247,7 @@ and run `sudo systemctl daemon-reload` before restarting.
 starting, motion, watchdog skips) go to the server's log:
 
 ```
-journalctl -u kiosk-server -f
+sudo journalctl -u kiosk-server -f
 ```
 
 ## Known limitation: mouse cursor

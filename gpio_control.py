@@ -58,7 +58,7 @@ def write_state():
 def force_next_mode():
     state["assetIndex"] = (state["assetIndex"] + 1) % ROTATION_LENGTH
     state["seq"] += 1
-    print(f"[button] -> assetIndex {state['assetIndex']}")
+    print(f"[button] -> assetIndex {state['assetIndex']}", flush=True)
     write_state()
 
 
@@ -66,11 +66,11 @@ def on_motion():
     global last_motion_trigger_time
     now = time.time()
     if now - last_motion_trigger_time < MIN_MOTION_INTERVAL_SECONDS:
-        print(f"[motion] ignored (cooldown, {now - last_motion_trigger_time:.1f}s since last)")
+        print(f"[motion] ignored (cooldown, {now - last_motion_trigger_time:.1f}s since last)", flush=True)
         return
     last_motion_trigger_time = now
     state["motionSeq"] += 1
-    print(f"[motion] -> motionSeq {state['motionSeq']}")
+    print(f"[motion] -> motionSeq {state['motionSeq']}", flush=True)
     write_state()
 
 
@@ -78,7 +78,7 @@ mode_button.when_pressed = force_next_mode
 pir.when_motion = on_motion
 
 write_state()  # write initial state immediately on startup
-print("Ready. Waiting for button presses / motion...")
+print("Ready. Waiting for button presses / motion...", flush=True)
 
 try:
     from signal import pause
