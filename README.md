@@ -81,7 +81,9 @@ tools/encode_video.sh input.mp4 assets/dog/new_clip.mp4
 - **Canvas:** 1920x1080 landscape, **pure black (`#000000`)
   background**. It's an OLED, so avoid bright elements that sit still
   for long periods (burn-in).
-- **Video:** MP4, H.264, yuv420p, constant 30fps, no audio.
+- **Video:** MP4, H.264 **Main profile**, yuv420p, constant 30fps, no
+  audio. Run deliveries through `tools/encode_video.sh` anyway; its
+  settings match clips known to play smoothly on the Pi.
 - **Seamless joins:** every awake clip starts and ends on the same
   "neutral open eyes" frame, so they can be mixed in any order.
   Looping clips end on their first frame.
