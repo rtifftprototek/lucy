@@ -7,23 +7,12 @@ Requires=kiosk-server.service
 Type=simple
 User=admin
 Environment=XDG_RUNTIME_DIR=/run/user/1000
-# The 5.5" OLED panel is natively portrait (1080x1920). Rotate the output
-# so the page renders as 1920x1080 landscape. Use 90 or 270 depending on
+# Rotation for the portrait-native 5.5" OLED: 90 or 270 depending on
 # which way the panel is mounted (180 if it ends up upside down).
+# kiosk-start.sh applies it, then starts Chromium.
 Environment=LUCY_ROTATION=90
 ExecStartPre=/bin/sh -c 'rm -f /run/user/1000/wayland-0 /run/user/1000/wayland-0.lock'
-ExecStart=/usr/bin/cage -- /bin/sh -c 'wlr-randr --output HDMI-A-1 --transform "$LUCY_ROTATION"; exec /usr/bin/chromium \
-  --kiosk \
-  --ozone-platform=wayland \
-  --noerrdialogs \
-  --disable-infobars \
-  --disable-session-crashed-bubble \
-  --disable-translate \
-  --no-first-run \
-  --overscroll-history-navigation=0 \
-  --autoplay-policy=no-user-gesture-required \
-  --check-for-update-interval=31536000 \
-  http://localhost:8080/index.html'
+ExecStart=/usr/bin/cage -- /home/admin/eve-kiosk/kiosk-start.sh
 Restart=always
 RestartSec=2
 

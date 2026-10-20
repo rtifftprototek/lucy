@@ -31,9 +31,10 @@ fixes are needed to make it work:
      remount.
    - `cmdline.txt` must stay a single line.
 2. **Rotation.**
-   - `kiosk-display.service` runs `wlr-randr` inside `cage` to rotate
-     the output by `LUCY_ROTATION` (90; use 270 if the panel is
-     mounted the other way).
+   - `kiosk-display.service` starts `kiosk-start.sh` inside `cage`. The
+     script runs `wlr-randr` to rotate the output by `LUCY_ROTATION`
+     (90; use 270 if the panel is mounted the other way), retrying
+     until the output is ready, then starts Chromium.
    - Needs `sudo apt install -y wlr-randr`.
 
 Notes:
@@ -241,6 +242,13 @@ cd /home/admin/eve-kiosk && git pull && sudo systemctl restart kiosk-server kios
 
 If a `.service` file changed, also copy it into `/etc/systemd/system/`
 and run `sudo systemctl daemon-reload` before restarting.
+
+**Watching what the page is doing:** the page's log messages (clips
+starting, motion, watchdog skips) go to the server's log:
+
+```
+journalctl -u kiosk-server -f
+```
 
 ## Known limitation: mouse cursor
 

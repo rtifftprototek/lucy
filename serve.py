@@ -13,6 +13,20 @@ from http.server import HTTPServer, SimpleHTTPRequestHandler
 
 
 class NoCacheHandler(SimpleHTTPRequestHandler):
+    def do_POST(self):
+        # index.html posts its console messages here so they show up in
+        # the system log: journalctl -u kiosk-server -f
+        if self.path != "/log":
+            self.send_error(404)
+            return
+        length = int(self.headers.get("Content-Length", 0))
+        print("[page]", self.rfile.read(length).decode("utf-8", "replace"), flush=True)
+        self.send_response(204)
+        self.end_headers()
+
+    def log_request(self, code="-", size="-"):
+        pass  # don't log every file request - it drowns out the page messages
+
     def end_headers(self):
         self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
         self.send_header("Pragma", "no-cache")
@@ -22,5 +36,5 @@ class NoCacheHandler(SimpleHTTPRequestHandler):
 
 if __name__ == "__main__":
     server = HTTPServer(("0.0.0.0", 8080), NoCacheHandler)
-    print("Serving on :8080 with caching disabled")
+    print("Serving on :8080 with caching disabled", flush=True)
     server.serve_forever()

@@ -213,6 +213,18 @@
 
   // =====================================================================
 
+  // Copy console messages to serve.py, which prints them to the system
+  // log, so playback can be followed on the Pi with:
+  //   journalctl -u kiosk-server -f
+  ['log', 'warn', 'error'].forEach(level => {
+    const original = console[level].bind(console);
+    console[level] = (...args) => {
+      original(...args);
+      const text = args.map(a => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ');
+      fetch('log', { method: 'POST', body: `${level}: ${text}` }).catch(() => {});
+    };
+  });
+
   const $ = (id) => document.getElementById(id);
   const randBetween = (min, max) => min + Math.random() * (max - min);
 
