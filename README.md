@@ -39,6 +39,9 @@ fixes are needed to make it work:
    - Needs `sudo apt install -y wlr-randr`.
 
 Notes:
+- Video is decoded in software (`LUCY_CHROMIUM_FLAGS` in
+  `kiosk-display.service`). Chromium's hardware decoding stalled clips
+  partway through on this setup.
 - Use the Pi's **HDMI0** port (next to USB-C), which is `HDMI-A-1`.
 - Power the panel from its own USB-C supply.
 - The boot splash and text before the kiosk starts still look garbled

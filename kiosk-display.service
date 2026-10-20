@@ -11,6 +11,10 @@ Environment=XDG_RUNTIME_DIR=/run/user/1000
 # which way the panel is mounted (180 if it ends up upside down).
 # kiosk-start.sh applies it, then starts Chromium.
 Environment=LUCY_ROTATION=90
+# Decode video in software. Chromium's hardware decoding on the Pi kept
+# stalling partway through clips (with the CPU idle); software decoding
+# plays them cleanly at about half of the Pi 4's CPU.
+Environment=LUCY_CHROMIUM_FLAGS=--disable-accelerated-video-decode
 ExecStartPre=/bin/sh -c 'rm -f /run/user/1000/wayland-0 /run/user/1000/wayland-0.lock'
 ExecStart=/usr/bin/cage -- /home/admin/eve-kiosk/kiosk-start.sh
 Restart=always
