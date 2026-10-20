@@ -6,7 +6,7 @@ entirely). Useful for understanding the sensor's real hardware
 behavior/sensitivity independent of any of the app's own logic.
 
 Usage:
-    sudo systemctl stop kiosk-gpio   # frees GPIO27 for this script to use
+    sudo systemctl stop kiosk-gpio   # frees the sensor pin for this script to use
     python3 test_pir.py
     (Ctrl+C to stop)
     sudo systemctl start kiosk-gpio  # resume normal operation after
@@ -15,7 +15,9 @@ Usage:
 import time
 from gpiozero import MotionSensor
 
-pir = MotionSensor(27)
+PIR_PIN = 22  # BCM number = physical pin 15 - keep in sync with gpio_control.py
+
+pir = MotionSensor(PIR_PIN)
 last_time = None
 count = 0
 
@@ -33,7 +35,7 @@ def on_motion():
 
 pir.when_motion = on_motion
 
-print("Watching raw PIR sensor output on GPIO27. Ctrl+C to stop.")
+print(f"Watching raw PIR sensor output on GPIO{PIR_PIN}. Ctrl+C to stop.")
 try:
     while True:
         time.sleep(1)

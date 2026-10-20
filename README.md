@@ -153,7 +153,7 @@ Cycles forever through `SIGN_PLAYLIST`:
 | Component | Pin | Notes |
 |---|---|---|
 | Mode button | GPIO17 (physical pin 11) → button → GND | Uses internal pull-up, no resistor needed |
-| PIR sensor Signal | GPIO27 (physical pin 13) | SR602 module — power from Pi **3.3V** (pin 1) and GND, no level-shifting needed since it accepts 3.3-15V directly |
+| PIR sensor Signal | GPIO22 (physical pin 15) | SR602 module — power from Pi **3.3V** (pin 1) and GND (e.g. pin 9), no level-shifting needed since it accepts 3.3-15V directly. Moved from GPIO27/pin 13, which stopped reading the sensor; `PIR_PIN` in `gpio_control.py` and `test_pir.py` |
 
 - A button press increments `seq`, and the page switches mode.
 - A motion detection increments `motionSeq`, and the page may wake
@@ -172,7 +172,7 @@ sudo systemctl enable --now kiosk-gpio
 **Quick sensor test (bypasses the web page):**
 ```
 sudo systemctl stop kiosk-gpio
-python3 -c "from gpiozero import MotionSensor; import time; pir = MotionSensor(27); pir.when_motion = lambda: print('MOTION DETECTED'); print('watching...'); [time.sleep(1) for _ in range(30)]"
+python3 -c "from gpiozero import MotionSensor; import time; pir = MotionSensor(22); pir.when_motion = lambda: print('MOTION DETECTED'); print('watching...'); [time.sleep(1) for _ in range(30)]"
 sudo systemctl start kiosk-gpio
 ```
 
