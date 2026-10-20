@@ -9,7 +9,10 @@ Motion triggers less than MIN_MOTION_INTERVAL_SECONDS apart are dropped,
 so continuous nearby motion (e.g. someone fidgeting right next to the
 sensor during bench testing) doesn't flood the page.
 
-This script writes {motionSeq, assetIndex, seq} to state.json.
+This script writes {motionSeq, assetIndex, seq, motionActive} to
+state.json. `motionActive` is true for as long as the sensor's output is
+high (it stays high while motion continues), so the page can wake Lucy
+for someone who's already standing there, not just on a fresh trigger.
 `motionSeq` increments on every ACCEPTED motion detection (i.e. one
 that passed the cooldown check) - the SR602 itself also has its own
 ~5s built-in blocking time between raw pulses. `seq` increments on
@@ -45,6 +48,7 @@ state = {
     "motionSeq": 0,
     "assetIndex": 0,
     "seq": 0,
+    "motionActive": False,
 }
 last_motion_trigger_time = 0.0
 
@@ -64,18 +68,26 @@ def force_next_mode():
 
 def on_motion():
     global last_motion_trigger_time
+    state["motionActive"] = True
     now = time.time()
     if now - last_motion_trigger_time < MIN_MOTION_INTERVAL_SECONDS:
-        print(f"[motion] ignored (cooldown, {now - last_motion_trigger_time:.1f}s since last)", flush=True)
-        return
-    last_motion_trigger_time = now
-    state["motionSeq"] += 1
-    print(f"[motion] -> motionSeq {state['motionSeq']}", flush=True)
+        print(f"[motion] active (cooldown, {now - last_motion_trigger_time:.1f}s since last trigger)", flush=True)
+    else:
+        last_motion_trigger_time = now
+        state["motionSeq"] += 1
+        print(f"[motion] -> motionSeq {state['motionSeq']}", flush=True)
+    write_state()
+
+
+def on_no_motion():
+    state["motionActive"] = False
+    print("[motion] cleared", flush=True)
     write_state()
 
 
 mode_button.when_pressed = force_next_mode
 pir.when_motion = on_motion
+pir.when_no_motion = on_no_motion
 
 write_state()  # write initial state immediately on startup
 print("Ready. Waiting for button presses / motion...", flush=True)

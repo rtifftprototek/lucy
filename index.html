@@ -381,9 +381,14 @@
     playDogClip('sleeping', myGen, () => loopSleeping(myGen));
   }
 
-  function handleMotion() {
+  // Called on each new motion trigger, and also on every poll while the
+  // sensor reports motion is still going on (quiet = true, so that
+  // doesn't flood the log). The second case matters because the sensor
+  // stays triggered while someone keeps moving: without it, someone
+  // standing in front of Lucy as she dozes off would never wake her.
+  function handleMotion(quiet = false) {
     if (currentMode !== 'dog') {
-      console.log('[motion] ignored - not in dog mode');
+      if (!quiet) console.log('[motion] ignored - not in dog mode');
       return;
     }
     const sleptMs = asleepSince === null ? -1 : Date.now() - asleepSince;
@@ -391,7 +396,7 @@
       console.log('[motion] waking Lucy');
       gen++;
       wakeUp(gen);
-    } else {
+    } else if (!quiet) {
       console.log('[motion] ignored - Lucy is', dogState, '(asleep', sleptMs, 'ms)');
     }
   }
@@ -547,7 +552,8 @@
 
   // ---- Button + motion sensor (gpio_control.py -> state.json) ----
   // A change in `seq` means the button was pressed; a change in
-  // `motionSeq` means the sensor saw someone.
+  // `motionSeq` means the sensor saw someone; `motionActive` means it
+  // still sees them.
   let lastSeq = null;
   let lastMotionSeq = null;
   setInterval(() => {
@@ -565,6 +571,7 @@
           lastMotionSeq = data.motionSeq;
           if (!firstRun) handleMotion();
         }
+        if (data.motionActive === true) handleMotion(true);
       })
       .catch(() => {});
   }, 500);

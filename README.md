@@ -107,7 +107,8 @@ display boots into dog mode.
    (`SLEEP_MIN_MS`/`SLEEP_MAX_MS`), then she wakes on her own (back to
    step 1).
 
-**Motion** wakes her straight away (back to step 1), but only while
+**Motion** wakes her straight away (back to step 1), including someone
+who was already there and is still moving, but only while
 she's asleep and has been for at least 10s
 (`MIN_SLEEP_BEFORE_MOTION_MS`). Motion while she's awake, or while
 she's falling asleep, is ignored.
