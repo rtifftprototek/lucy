@@ -107,7 +107,7 @@ display boots into dog mode.
    - the idle loop always plays at least once
    - the same clip never plays twice in a row
 3. **Falls asleep.** `fall_asleep` plays once.
-4. **Sleeps.** `sleeping_loop` repeats for a random 3–8 minutes
+4. **Sleeps.** `sleeping_loop` repeats for a random 20–30 seconds
    (`SLEEP_MIN_MS`/`SLEEP_MAX_MS`), then she wakes on her own (back to
    step 1).
 
