@@ -41,19 +41,21 @@
   }
 
   /* ---- Dog mode ----
-     Two stacked video players. The next clip loads in the hidden one and
-     only becomes visible once it's actually playing, so there's never a
-     black flash between clips. */
+     Two stacked video players. The next clip loads in the one underneath
+     and is only brought to the front once it has actually drawn a frame,
+     so there's never a black flash between clips. (Both stay "visible" -
+     the one in front just covers the other - because Chromium doesn't
+     draw frames for hidden videos, so we'd never know it was ready.) */
   #mode-dog video {
     position: absolute;
     inset: 0;
     width: 100vw;
     height: 100vh;
     object-fit: cover;
-    visibility: hidden;
+    z-index: 0;
   }
   #mode-dog video.showing {
-    visibility: visible;
+    z-index: 1;
   }
 
   /* ---- Digital sign mode ----
@@ -257,7 +259,9 @@
   // also checks playback is still moving: stuck within the last second
   // of the clip counts as finished; stuck anywhere else for
   // VIDEO_STALL_MS counts as failed. Either way, the show goes on.
+  let playTokens = 0;
   function playVideo(v, src, label, { onDone, onPlaying = null }) {
+    v.playToken = ++playTokens;
     let finished = false;
     const finish = (failed) => {
       if (finished) return;
@@ -319,11 +323,28 @@
       onPlaying: () => {
         next.onplaying = null;
         if (myGen !== gen) return;
-        const prev = players[activePlayer];
-        next.classList.add('showing');
-        prev.classList.remove('showing');
-        releaseVideo(prev);
-        activePlayer = 1 - activePlayer;
+        // 'playing' can fire before the first frame is on screen
+        // (especially with software decoding), so wait for a frame to
+        // actually be drawn before bringing this player to the front.
+        let swapped = false;
+        const swap = () => {
+          if (swapped || myGen !== gen) return;
+          swapped = true;
+          const prev = players[activePlayer];
+          next.classList.add('showing');
+          prev.classList.remove('showing');
+          activePlayer = 1 - activePlayer;
+          // Keep the old clip's last frame underneath for a moment, then
+          // free its decoder - unless it's already been reused.
+          const prevToken = prev.playToken;
+          setTimeout(() => {
+            if (prev.playToken === prevToken && players[activePlayer] !== prev) releaseVideo(prev);
+          }, 300);
+        };
+        if (next.requestVideoFrameCallback) {
+          next.requestVideoFrameCallback(() => requestAnimationFrame(swap));
+        }
+        setTimeout(swap, 500); // fallback if no frame callback arrives
       },
     });
   }
@@ -455,8 +476,13 @@
     } else if (item.type === 'video') {
       const done = () => {
         if (myGen !== gen) return;
-        releaseVideo(signVideo);
         next();
+        // Let the slide fade out on the video's last frame instead of
+        // blanking it mid-fade, then free the decoder.
+        const token = signVideo.playToken;
+        setTimeout(() => {
+          if (signVideo.playToken === token) releaseVideo(signVideo);
+        }, 1000);
       };
       // Only fade the slide in once the video is actually playing, so a
       // missing file is skipped without flashing an empty black slide.
